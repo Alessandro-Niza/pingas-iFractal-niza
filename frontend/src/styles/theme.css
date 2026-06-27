@@ -1,0 +1,375 @@
+/* ============================================================
+   Tema — dark azulado, inspirado no mockup do torneio.
+   Toda a paleta vive aqui em variaveis: trocar cor = 1 lugar.
+   ============================================================ */
+
+:root {
+  --bg: #0a0e17;
+  --surface: #0f1521;
+  --surface-2: #141c2b;
+  --border: #1f2a3d;
+  --border-soft: #18222f;
+
+  --accent: #3b82f6;
+  --accent-strong: #2563eb;
+  --accent-soft: rgba(59, 130, 246, 0.12);
+
+  --text: #e6ebf2;
+  --muted: #8893a7;
+  --muted-2: #5c6678;
+
+  --win: #34d399;
+  --loss: #f87171;
+  --gold: #facc15;
+
+  --radius: 14px;
+  --radius-sm: 10px;
+
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ----- shell / layout ------------------------------------- */
+
+.app {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px 20px 64px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.logo {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.brand .accent {
+  color: var(--accent);
+}
+
+/* ----- tabs ----------------------------------------------- */
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+}
+
+.tab {
+  flex: 1;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.tab:hover {
+  color: var(--text);
+}
+.tab[aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ----- cards ---------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+
+.card + .card {
+  margin-top: 16px;
+}
+
+.card-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-title::before {
+  content: "";
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* ----- form controls -------------------------------------- */
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+input,
+select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  padding: 10px 12px;
+  min-width: 0;
+}
+input:focus,
+select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+input::placeholder {
+  color: var(--muted-2);
+}
+
+.input-grow {
+  flex: 1;
+}
+
+.score-input {
+  width: 56px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+button.btn {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+button.btn:hover {
+  background: var(--accent-strong);
+}
+button.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+button.btn.ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+button.btn.ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: transparent;
+}
+button.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ----- jogadores list ------------------------------------- */
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.lista-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+/* ----- partidas ------------------------------------------- */
+
+.partida {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+.partida.feita {
+  border-color: var(--border);
+}
+.partida .lado {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.partida .lado.b {
+  justify-content: flex-end;
+}
+.partida .nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.partida .vs {
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.placar {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 1.05rem;
+  min-width: 52px;
+  text-align: center;
+}
+.placar .ganhou {
+  color: var(--win);
+}
+.placar .perdeu {
+  color: var(--muted);
+}
+
+/* ----- classificacao -------------------------------------- */
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.tabela th {
+  text-align: right;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 0 8px 12px;
+}
+.tabela th:nth-child(2) {
+  text-align: left;
+}
+.tabela td {
+  padding: 12px 8px;
+  text-align: right;
+  border-top: 1px solid var(--border-soft);
+}
+.tabela td.nome-col {
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pos {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+.tabela tr.lider .pos {
+  background: var(--accent);
+  color: #fff;
+}
+.tabela td.pts {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ----- diversos ------------------------------------------- */
+
+.vazio {
+  color: var(--muted);
+  text-align: center;
+  padding: 28px 12px;
+  font-size: 0.92rem;
+}
+.erro {
+  color: var(--loss);
+  font-size: 0.85rem;
+  margin-top: 10px;
+}
+
+@media (max-width: 560px) {
+  .tabela .hide-sm {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
