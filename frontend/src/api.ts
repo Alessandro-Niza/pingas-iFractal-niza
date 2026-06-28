@@ -12,6 +12,8 @@ export interface Partida {
   sets_a: number;
   sets_b: number;
   finalizada: boolean;
+  fase: "grupos" | "mata";
+  rodada: number | null;
 }
 
 export interface LinhaClassificacao {
@@ -29,7 +31,10 @@ export interface LinhaClassificacao {
 
 export type Modo = "pontos_corridos" | "grupos";
 
-const API_BASE = import.meta.env.DEV ? "http://localhost:8000" : "";
+// Em dev, fala com o backend no MESMO host que abriu a pagina (porta 8000).
+// Assim funciona tanto no Mac (localhost) quanto no celular (http://<ip>:5173 -> :8000).
+// Em producao (build servido pelo FastAPI), caminho relativo = mesma origem.
+const API_BASE = import.meta.env.DEV ? `http://${location.hostname}:8000` : "";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(API_BASE + path, {
@@ -81,6 +86,11 @@ export const api = {
   deletarPartida: (id: number) =>
     req<void>(`/partidas/${id}`, { method: "DELETE" }),
   limparPartidas: () => req<void>("/partidas", { method: "DELETE" }),
+
+  // mata-mata (eliminatorias apos a fase de grupos)
+  listarMataMata: (signal?: AbortSignal) => req<Partida[]>("/mata-mata", { signal }),
+  iniciarMataMata: () => req<Partida[]>("/mata-mata/iniciar", { method: "POST" }),
+  limparMataMata: () => req<void>("/mata-mata", { method: "DELETE" }),
 
   // classificacao (ja vem ciente do modo, calculada no backend)
   classificacao: (signal?: AbortSignal) =>

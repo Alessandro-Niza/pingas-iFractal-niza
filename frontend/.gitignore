@@ -26,6 +26,7 @@ backend/.venv/
 backend/venv/
 backend/__pycache__/
 backend/.pytest_cache/
+backend/*.db
 
 # Python
 *.pyc
@@ -52,6 +53,7 @@ __pycache__/
 # Sistema Operacional
 # ==========================================================
 .DS_Store
+**/.DS_Store
 Thumbs.db
 
 # ==========================================================

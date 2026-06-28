@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, type LinhaClassificacao, type Modo } from "../api";
+import { Trophy } from "lucide-react";
+import { api, type Jogador, type LinhaClassificacao, type Partida, type Modo } from "../api";
 
 export function Classificacao() {
   const [linhas, setLinhas] = useState<LinhaClassificacao[]>([]);
+  const [mata, setMata] = useState<Partida[]>([]);
+  const [jogadores, setJogadores] = useState<Jogador[]>([]);
   const [modo, setModo] = useState<Modo>("pontos_corridos");
   const [modoEf, setModoEf] = useState<Modo>("pontos_corridos");
   const [erro, setErro] = useState("");
@@ -13,13 +16,17 @@ export function Classificacao() {
     async function carregar() {
       if (ac.signal.aborted) return;
       try {
-        const [cl, cfg] = await Promise.all([
+        const [cl, cfg, mm, js] = await Promise.all([
           api.classificacao(ac.signal),
           api.lerConfig(ac.signal),
+          api.listarMataMata(ac.signal),
+          api.listarJogadores(ac.signal),
         ]);
         setLinhas(cl);
         setModo(cfg.modo);
         setModoEf(cfg.modo_efetivo);
+        setMata(mm);
+        setJogadores(js);
         setErro("");
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
@@ -34,38 +41,33 @@ export function Classificacao() {
     return () => ac.abort();
   }, []);
 
+  const nomeDe = (id: number) => jogadores.find((j) => j.id === id)?.nome ?? "?";
   const fallbackGrupos = modo === "grupos" && modoEf !== "grupos";
 
   const Aviso = () =>
     fallbackGrupos ? (
-      <p
-        style={{
-          margin: "0 0 14px",
-          padding: "10px 12px",
-          borderRadius: 8,
-          background: "rgba(245, 158, 11, 0.1)",
-          borderLeft: "3px solid #f59e0b",
-          color: "#fbbf24",
-          fontSize: "0.9rem",
-          lineHeight: 1.45,
-        }}
-      >
+      <p className="aviso">
         Fase de grupos selecionada, mas o campeonato está rodando em{" "}
         <strong>Pontos Corridos</strong>: todos os grupos devem possuir pelo menos
         2 jogadores para iniciar a fase de grupos.
       </p>
     ) : null;
 
+  const Resumo = () => <ResumoMata mata={mata} nomeDe={nomeDe} />;
+
   if (linhas.length === 0) {
     return (
-      <section className="card">
-        <h2 className="card-title">Classificação</h2>
-        <Aviso />
-        <p className="vazio">
-          Nenhuma partida finalizada ainda. Registre resultados na aba Partidas.
-        </p>
-        {erro && <p className="erro">{erro}</p>}
-      </section>
+      <>
+        <Resumo />
+        <section className="card">
+          <h2 className="card-title">Classificação</h2>
+          <Aviso />
+          <p className="vazio">
+            Nenhuma partida finalizada ainda. Registre resultados na aba Partidas.
+          </p>
+          {erro && <p className="erro">{erro}</p>}
+        </section>
+      </>
     );
   }
 
@@ -74,6 +76,7 @@ export function Classificacao() {
     const grupos = [...new Set(linhas.map((l) => l.grupo ?? "—"))];
     return (
       <>
+        <Resumo />
         <Aviso />
         {grupos.map((g) => (
           <section className="card" key={g}>
@@ -87,11 +90,67 @@ export function Classificacao() {
   }
 
   return (
-    <section className="card">
-      <h2 className="card-title">Classificação geral</h2>
-      <Aviso />
-      <Tabela linhas={linhas} />
-      {erro && <p className="erro">{erro}</p>}
+    <>
+      <Resumo />
+      <section className="card">
+        <h2 className="card-title">Classificação geral</h2>
+        <Aviso />
+        <Tabela linhas={linhas} />
+        {erro && <p className="erro">{erro}</p>}
+      </section>
+    </>
+  );
+}
+
+// Resumo do chaveamento (semis -> final -> campeao). Some quando nao ha mata-mata.
+function ResumoMata({ mata, nomeDe }: { mata: Partida[]; nomeDe: (id: number) => string }) {
+  if (mata.length === 0) return null;
+
+  const rodadas = Array.from(new Set(mata.map((p) => p.rodada ?? 0))).sort((a, b) => a - b);
+  const ultima = rodadas[rodadas.length - 1];
+  const final = mata.filter((p) => p.rodada === ultima);
+  const campeaoId =
+    final.length === 1 && final[0].finalizada
+      ? final[0].sets_a > final[0].sets_b
+        ? final[0].jogador_a_id
+        : final[0].jogador_b_id
+      : null;
+
+  const rotulo = (q: number) =>
+    q === 1 ? "Final" : q === 2 ? "Semifinais" : q === 4 ? "Quartas de final" : q === 8 ? "Oitavas de final" : "Rodada";
+
+  return (
+    <section className="card resumo-mata">
+      <h2 className="card-title">Mata-mata</h2>
+      {campeaoId !== null && (
+        <div className="resumo-campeao">
+          <Trophy size={18} />
+          <span>
+            Campeão: <strong>{nomeDe(campeaoId)}</strong>
+          </span>
+        </div>
+      )}
+      {[...rodadas].reverse().map((r) => {
+        const jogos = mata.filter((p) => p.rodada === r);
+        return (
+          <div key={r}>
+            <div className="rodada-titulo">{rotulo(jogos.length)}</div>
+            {jogos.map((p) => {
+              const aVenc = p.finalizada && p.sets_a > p.sets_b;
+              const bVenc = p.finalizada && p.sets_b > p.sets_a;
+              return (
+                <div className="resumo-jogo" key={p.id}>
+                  <span className={`nome-a ${aVenc ? "venc" : ""}`}>{nomeDe(p.jogador_a_id)}</span>
+                  <span className="placar-mini">
+                    {p.finalizada ? `${p.sets_a} : ${p.sets_b}` : "—"}
+                  </span>
+                  <span className={`nome-b ${bVenc ? "venc" : ""}`}>{nomeDe(p.jogador_b_id)}</span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
     </section>
   );
 }
