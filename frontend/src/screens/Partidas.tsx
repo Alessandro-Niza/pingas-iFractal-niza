@@ -131,8 +131,16 @@ export function Partidas() {
   const podeGerar = ehGrupos || jogadores.length >= 2;
 
   const cardDe = (p: Partida) => (
-    <PartidaCard key={p.id} partida={p} nomeDe={nomeDe} onMudou={recarregar} onApagar={apagar} onErro={setErro} />
-  );
+  <PartidaCard
+    key={p.id}
+    partida={p}
+    nomeDe={nomeDe}
+    onMudou={recarregar}
+    onApagar={apagar}
+    onErro={setErro}
+    onLimparErro={() => setErro("")}
+  />
+);
 
   return (
     <section className="card">

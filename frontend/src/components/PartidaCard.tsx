@@ -26,9 +26,12 @@ const btnSmall = { padding: "6px 12px", fontSize: "0.85rem" } as const;
  * - onMudou: chamado apos salvar (pai recarrega).
  * - onApagar: se passado, mostra a lixeira (some no mata-mata).
  * - onErro: reporta erro ao pai.
+ * - onLimparErro: avisa o pai pra limpar o aviso (ex: ao escolher o saque).
  *
  * Regra: numa partida nova, o placar so libera depois de escolher
- * quem sai com a bola (tocar no nome do jogador).
+ * quem sai com a bola (tocar no nome do jogador). Enquanto nao escolhe,
+ * o stepper aparece travado e tocar nele exibe um aviso. Ao escolher,
+ * o aviso e limpado.
  */
 export function PartidaCard({
   partida: p,
@@ -36,12 +39,14 @@ export function PartidaCard({
   onMudou,
   onApagar,
   onErro,
+  onLimparErro,
 }: {
   partida: Partida;
   nomeDe: (id: number) => string;
   onMudou: () => void;
   onApagar?: (p: Partida) => void;
   onErro?: (msg: string) => void;
+  onLimparErro?: () => void;
 }) {
   const [placar, setPlacar] = useState<{ a: string; b: string }>({ a: "", b: "" });
   const [editando, setEditando] = useState(false);
@@ -60,7 +65,7 @@ export function PartidaCard({
   // botao Salvar (digitacao): valida antes de gravar
   function salvar() {
     if (precisaEscolherSaque) {
-      onErro?.("Escolha quem sai com a bola antes de começar a partida.");
+      onErro?.("Necessário escolher quem começa sacando.");
       return;
     }
     const a = parseInt(placar.a, 10);
@@ -79,7 +84,7 @@ export function PartidaCard({
   // +/− ao vivo: atualiza e, se finalizou, salva sozinho
   function passo(lado: "a" | "b", valor: string) {
     if (precisaEscolherSaque) {
-      onErro?.("Escolha quem sai com a bola antes de começar a partida.");
+      onErro?.("Necessário escolher quem começa sacando.");
       return;
     }
     const novo = { ...placar, [lado]: valor };
@@ -97,6 +102,12 @@ export function PartidaCard({
   function abrirEdicao() {
     setPlacar({ a: String(p.sets_a), b: String(p.sets_b) });
     setEditando(true);
+  }
+
+  // escolhe quem saca primeiro e limpa o aviso (a condicao do erro deixou de existir)
+  function escolherSaque(lado: 0 | 1) {
+    setSacaInicial(lado);
+    onLimparErro?.();
   }
 
   const emEdicao = !p.finalizada || editando;
@@ -120,7 +131,7 @@ export function PartidaCard({
       textDecorationColor: "var(--muted-2)",
       textUnderlineOffset: 4,
     }) as const;
-  const aoTocarLado = (lado: 0 | 1) => (podeSaque ? () => setSacaInicial(lado) : undefined);
+  const aoTocarLado = (lado: 0 | 1) => (podeSaque ? () => escolherSaque(lado) : undefined);
   const tituloSaque = podeSaque ? "Tocar pra marcar quem saca primeiro" : undefined;
 
   return (
@@ -135,9 +146,9 @@ export function PartidaCard({
 
         {emEdicao ? (
           <div className="row partida-acoes">
-            <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} disabled={precisaEscolherSaque} />
+            <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} travado={precisaEscolherSaque} />
             <span className="vs">x</span>
-            <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} disabled={precisaEscolherSaque} />
+            <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} travado={precisaEscolherSaque} />
             <button className="btn ghost" style={btnSmall} onClick={salvar}>Salvar</button>
             {p.finalizada && (
               <button className="btn ghost" style={btnSmall} onClick={() => setEditando(false)}>
@@ -184,7 +195,7 @@ export function PartidaCard({
             {saca === 0 && <MarcaSaque />}
           </span>
           {emEdicao ? (
-            <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} disabled={precisaEscolherSaque} />
+            <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} travado={precisaEscolherSaque} />
           ) : (
             <span className={`pc-score ${p.sets_a > p.sets_b ? "ganhou" : "perdeu"}`}>{p.sets_a}</span>
           )}
@@ -197,7 +208,7 @@ export function PartidaCard({
             {saca === 1 && <MarcaSaque />}
           </span>
           {emEdicao ? (
-            <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} disabled={precisaEscolherSaque} />
+            <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} travado={precisaEscolherSaque} />
           ) : (
             <span className={`pc-score ${p.sets_b > p.sets_a ? "ganhou" : "perdeu"}`}>{p.sets_b}</span>
           )}
@@ -251,28 +262,28 @@ function MarcaSaque() {
 }
 
 // Stepper de placar: [−] valor [+]. Sem limite superior (>= 0).
-// disabled trava os botoes e o input (usado enquanto o saque nao foi escolhido).
+// travado: aparencia de bloqueado, mas os botoes seguem clicaveis de
+// proposito — pra que o clique caia no guard do pai e exiba o aviso.
 function Stepper({
   valor,
   onPasso,
   onDigitar,
-  disabled,
+  travado,
 }: {
   valor: string;
   onPasso: (v: string) => void;
   onDigitar: (v: string) => void;
-  disabled?: boolean;
+  travado?: boolean;
 }) {
   const n = parseInt(valor, 10);
   const num = isNaN(n) ? 0 : n;
   const clamp = (v: number) => String(Math.max(MIN_PLACAR, v));
 
   return (
-    <div className="stepper" aria-disabled={disabled}>
+    <div className={`stepper ${travado ? "travado" : ""}`} aria-disabled={travado}>
       <button
         type="button"
         className="stepper-btn"
-        disabled={disabled}
         onClick={() => onPasso(clamp(num - 1))}
         aria-label="menos"
       >
@@ -283,7 +294,7 @@ function Stepper({
         inputMode="numeric"
         placeholder="0"
         value={valor}
-        disabled={disabled}
+        readOnly={travado}
         onChange={(e) => {
           const so = e.target.value.replace(/\D/g, "");
           onDigitar(so === "" ? "" : clamp(parseInt(so, 10)));
@@ -292,7 +303,6 @@ function Stepper({
       <button
         type="button"
         className="stepper-btn"
-        disabled={disabled}
         onClick={() => onPasso(clamp(num + 1))}
         aria-label="mais"
       >
