@@ -95,4 +95,14 @@ export const api = {
   // classificacao (ja vem ciente do modo, calculada no backend)
   classificacao: (signal?: AbortSignal) =>
     req<LinhaClassificacao[]>("/classificacao", { signal }),
+
+  // exportacao: baixa o campeonato como zip de HTMLs estaticos (offline)
+  exportar: async (): Promise<Blob> => {
+    const res = await fetch(API_BASE + "/exportar");
+    if (!res.ok) {
+      const corpo = await res.json().catch(() => ({}));
+      throw new Error(corpo.detail ?? "Falha ao exportar o campeonato.");
+    }
+    return res.blob();
+  },
 };

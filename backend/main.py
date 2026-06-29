@@ -10,13 +10,16 @@ Docs interativas:
 """
 import sqlite3
 from pathlib import Path
+from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import Response
 from typing import Optional
 from pydantic import BaseModel, Field
 
 from db import init_db, db_dep
+from exportar import gerar_zip_export
 
 # ---------------------------------------------------------------- models
 
@@ -357,6 +360,37 @@ def iniciar_mata_mata(conn: sqlite3.Connection = Depends(db_dep)):
 def limpar_mata_mata(conn: sqlite3.Connection = Depends(db_dep)):
     conn.execute("DELETE FROM partidas WHERE fase = 'mata'")
     conn.commit()
+
+# ---------------------------------------------------------------- exportacao
+
+@app.get("/exportar")
+def exportar(conn: sqlite3.Connection = Depends(db_dep)):
+    """Gera um zip com o campeonato em HTML estatico (100% offline)."""
+    modo_ef = get_modo_efetivo(conn)
+    jogadores = [dict(j) for j in conn.execute("SELECT id, nome, grupo FROM jogadores").fetchall()]
+    partidas = [dict(p) for p in conn.execute("SELECT * FROM partidas ORDER BY id").fetchall()]
+    classif = _calcular_classificacao(conn, modo_ef)
+    mata = [p for p in partidas if p["fase"] == "mata"]
+
+    # campeao: na fase de grupos sai do mata-mata; em pontos corridos e o lider (se tudo terminou)
+    campeao_id = None
+    if modo_ef == "grupos":
+        if mata:
+            ultima = max(p["rodada"] for p in mata)
+            final = [p for p in mata if p["rodada"] == ultima]
+            if len(final) == 1 and final[0]["finalizada"]:
+                campeao_id = _vencedor(final[0])
+    else:
+        if fase_grupos_completa(conn) and classif:
+            campeao_id = classif[0]["jogador_id"]
+
+    conteudo = gerar_zip_export(modo_ef, jogadores, partidas, classif, mata, campeao_id)
+    nome_zip = f"Campeonato_iFractal_{datetime.now().year}.zip"
+    return Response(
+        content=conteudo,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{nome_zip}"'},
+    )
 
 # ---------------------------------------------------------------- frontend
 # Serve o build do front (frontend/dist) na MESMA origem da API.

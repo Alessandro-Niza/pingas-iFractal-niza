@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Download } from "lucide-react";
 import { api, type Modo } from "../api";
 
 export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => void }) {
@@ -6,6 +7,7 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
   const [modoEf, setModoEf] = useState<Modo>("pontos_corridos");
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
+  const [exportando, setExportando] = useState(false);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -72,6 +74,26 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
     }
   }
 
+  async function exportar() {
+    setErro("");
+    setExportando(true);
+    try {
+      const blob = await api.exportar();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Campeonato_iFractal_${new Date().getFullYear()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setExportando(false);
+    }
+  }
+
   const ehGrupos = modo === "grupos";
   const fallback = modo === "grupos" && modoEf !== "grupos";
 
@@ -101,6 +123,24 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
             2 jogadores para iniciar a fase de grupos.
           </p>
         )}
+      </section>
+
+      <section className="card">
+        <h2 className="card-title">Exportar campeonato</h2>
+        <p style={{ color: "var(--muted)", fontSize: "0.9rem", margin: "0 0 14px", lineHeight: 1.5 }}>
+          Baixa o campeonato como um pacote de páginas HTML (Classificação, Partidas e
+          Mata-mata) que funcionam offline em qualquer navegador. Ótimo para imprimir,
+          arquivar ou compartilhar o resultado.
+        </p>
+        <button
+          className="btn"
+          onClick={exportar}
+          disabled={exportando}
+          style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+        >
+          <Download size={16} />
+          {exportando ? "Gerando…" : "Exportar campeonato"}
+        </button>
       </section>
 
       <section className="card">

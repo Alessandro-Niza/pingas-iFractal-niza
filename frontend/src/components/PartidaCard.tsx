@@ -112,52 +112,110 @@ export function PartidaCard({
 
   return (
     <div className={`partida ${p.finalizada ? "feita" : ""}`}>
-      <div className="lado" onClick={aoTocarLado(0)} title={tituloSaque}>
-        <span className="avatar">{nomeA[0]?.toUpperCase()}</span>
-        <span className="nome" style={estiloNome(0)}>{nomeA}</span>
-        {saca === 0 && <MarcaSaque />}
+      {/* ===== DESKTOP (>= 761px): layout horizontal atual, intacto ===== */}
+      <div className="pc-desktop">
+        <div className="lado" onClick={aoTocarLado(0)} title={tituloSaque}>
+          <span className="avatar">{nomeA[0]?.toUpperCase()}</span>
+          <span className="nome" style={estiloNome(0)}>{nomeA}</span>
+          {saca === 0 && <MarcaSaque />}
+        </div>
+
+        {emEdicao ? (
+          <div className="row partida-acoes">
+            <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} />
+            <span className="vs">x</span>
+            <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} />
+            <button className="btn ghost" style={btnSmall} onClick={salvar}>Salvar</button>
+            {p.finalizada && (
+              <button className="btn ghost" style={btnSmall} onClick={() => setEditando(false)}>
+                Cancelar
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="row partida-acoes">
+            <div className="placar">
+              <span className={p.sets_a > p.sets_b ? "ganhou" : "perdeu"}>{p.sets_a}</span>
+              {" : "}
+              <span className={p.sets_b > p.sets_a ? "ganhou" : "perdeu"}>{p.sets_b}</span>
+            </div>
+            <button className="btn ghost" style={btnSmall} onClick={abrirEdicao}>Editar</button>
+          </div>
+        )}
+
+        <div className="lado b" onClick={aoTocarLado(1)} title={tituloSaque}>
+          {saca === 1 && <MarcaSaque />}
+          <span className="nome" style={estiloNome(1)}>{nomeB}</span>
+          <span className="avatar">{nomeB[0]?.toUpperCase()}</span>
+        </div>
+
+        {onApagar && (
+          <button
+            className="btn ghost"
+            style={{ ...btnSmall, color: "var(--loss)", display: "inline-flex", alignItems: "center", padding: "6px 10px" }}
+            onClick={() => onApagar(p)}
+            aria-label="Apagar esta partida"
+            title="Apagar esta partida"
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
       </div>
 
-      {emEdicao ? (
-        <div className="row" style={{ flexWrap: "nowrap", alignItems: "center" }}>
-          <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} />
-          <span className="vs">x</span>
-          <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} />
-          <button className="btn ghost" style={btnSmall} onClick={salvar}>Salvar</button>
-          {p.finalizada && (
-            <button className="btn ghost" style={btnSmall} onClick={() => setEditando(false)}>
-              Cancelar
+      {/* ===== MOBILE (<= 760px): cada jogador na sua linha com o placar do lado ===== */}
+      <div className="pc-mobile">
+        <div className="pc-row">
+          <span className="pc-jogador" onClick={aoTocarLado(0)} title={tituloSaque}>
+            <span className="avatar">{nomeA[0]?.toUpperCase()}</span>
+            <span className="nome" style={estiloNome(0)}>{nomeA}</span>
+            {saca === 0 && <MarcaSaque />}
+          </span>
+          {emEdicao ? (
+            <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} />
+          ) : (
+            <span className={`pc-score ${p.sets_a > p.sets_b ? "ganhou" : "perdeu"}`}>{p.sets_a}</span>
+          )}
+        </div>
+
+        <div className="pc-row">
+          <span className="pc-jogador" onClick={aoTocarLado(1)} title={tituloSaque}>
+            <span className="avatar">{nomeB[0]?.toUpperCase()}</span>
+            <span className="nome" style={estiloNome(1)}>{nomeB}</span>
+            {saca === 1 && <MarcaSaque />}
+          </span>
+          {emEdicao ? (
+            <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} />
+          ) : (
+            <span className={`pc-score ${p.sets_b > p.sets_a ? "ganhou" : "perdeu"}`}>{p.sets_b}</span>
+          )}
+        </div>
+
+        <div className="pc-acoes">
+          {emEdicao ? (
+            <>
+              <button className="btn ghost" style={btnSmall} onClick={salvar}>Salvar</button>
+              {p.finalizada && (
+                <button className="btn ghost" style={btnSmall} onClick={() => setEditando(false)}>
+                  Cancelar
+                </button>
+              )}
+            </>
+          ) : (
+            <button className="btn ghost" style={btnSmall} onClick={abrirEdicao}>Editar</button>
+          )}
+          {onApagar && (
+            <button
+              className="btn ghost"
+              style={{ ...btnSmall, color: "var(--loss)", display: "inline-flex", alignItems: "center", padding: "6px 10px" }}
+              onClick={() => onApagar(p)}
+              aria-label="Apagar esta partida"
+              title="Apagar esta partida"
+            >
+              <Trash2 size={16} />
             </button>
           )}
         </div>
-      ) : (
-        <div className="row" style={{ flexWrap: "nowrap", alignItems: "center" }}>
-          <div className="placar">
-            <span className={p.sets_a > p.sets_b ? "ganhou" : "perdeu"}>{p.sets_a}</span>
-            {" : "}
-            <span className={p.sets_b > p.sets_a ? "ganhou" : "perdeu"}>{p.sets_b}</span>
-          </div>
-          <button className="btn ghost" style={btnSmall} onClick={abrirEdicao}>Editar</button>
-        </div>
-      )}
-
-      <div className="lado b" onClick={aoTocarLado(1)} title={tituloSaque}>
-        {saca === 1 && <MarcaSaque />}
-        <span className="nome" style={estiloNome(1)}>{nomeB}</span>
-        <span className="avatar">{nomeB[0]?.toUpperCase()}</span>
       </div>
-
-      {onApagar && (
-        <button
-          className="btn ghost"
-          style={{ ...btnSmall, color: "var(--loss)", display: "inline-flex", alignItems: "center", padding: "6px 10px" }}
-          onClick={() => onApagar(p)}
-          aria-label="Apagar esta partida"
-          title="Apagar esta partida"
-        >
-          <Trash2 size={16} />
-        </button>
-      )}
     </div>
   );
 }

@@ -187,7 +187,7 @@ export function Partidas() {
       {erro && <p className="erro">{erro}</p>}
 
       {partidasGrupos.length > 0 && (
-        <div style={{ overflowY: "auto", maxHeight: "calc(100dvh - 300px)", marginTop: 6, paddingRight: 6 }}>
+        <div style={{ marginTop: 6 }}>
           {ehGrupos ? (
             <>
               {GRUPOS.map((g) => {
