@@ -26,6 +26,9 @@ const btnSmall = { padding: "6px 12px", fontSize: "0.85rem" } as const;
  * - onMudou: chamado apos salvar (pai recarrega).
  * - onApagar: se passado, mostra a lixeira (some no mata-mata).
  * - onErro: reporta erro ao pai.
+ *
+ * Regra: numa partida nova, o placar so libera depois de escolher
+ * quem sai com a bola (tocar no nome do jogador).
  */
 export function PartidaCard({
   partida: p,
@@ -56,6 +59,10 @@ export function PartidaCard({
 
   // botao Salvar (digitacao): valida antes de gravar
   function salvar() {
+    if (precisaEscolherSaque) {
+      onErro?.("Escolha quem sai com a bola antes de começar a partida.");
+      return;
+    }
     const a = parseInt(placar.a, 10);
     const b = parseInt(placar.b, 10);
     if (isNaN(a) || isNaN(b)) {
@@ -71,6 +78,10 @@ export function PartidaCard({
 
   // +/− ao vivo: atualiza e, se finalizou, salva sozinho
   function passo(lado: "a" | "b", valor: string) {
+    if (precisaEscolherSaque) {
+      onErro?.("Escolha quem sai com a bola antes de começar a partida.");
+      return;
+    }
     const novo = { ...placar, [lado]: valor };
     setPlacar(novo);
     const a = parseInt(novo.a || "0", 10);
@@ -90,6 +101,8 @@ export function PartidaCard({
 
   const emEdicao = !p.finalizada || editando;
   const podeSaque = !p.finalizada;
+  // partida nova ainda sem saque definido: trava o placar
+  const precisaEscolherSaque = podeSaque && sacaInicial === undefined;
   const a = parseInt(placar.a || "0", 10);
   const b = parseInt(placar.b || "0", 10);
   const saca: 0 | 1 | null =
@@ -122,9 +135,9 @@ export function PartidaCard({
 
         {emEdicao ? (
           <div className="row partida-acoes">
-            <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} />
+            <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} disabled={precisaEscolherSaque} />
             <span className="vs">x</span>
-            <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} />
+            <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} disabled={precisaEscolherSaque} />
             <button className="btn ghost" style={btnSmall} onClick={salvar}>Salvar</button>
             {p.finalizada && (
               <button className="btn ghost" style={btnSmall} onClick={() => setEditando(false)}>
@@ -171,7 +184,7 @@ export function PartidaCard({
             {saca === 0 && <MarcaSaque />}
           </span>
           {emEdicao ? (
-            <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} />
+            <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} disabled={precisaEscolherSaque} />
           ) : (
             <span className={`pc-score ${p.sets_a > p.sets_b ? "ganhou" : "perdeu"}`}>{p.sets_a}</span>
           )}
@@ -184,7 +197,7 @@ export function PartidaCard({
             {saca === 1 && <MarcaSaque />}
           </span>
           {emEdicao ? (
-            <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} />
+            <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} disabled={precisaEscolherSaque} />
           ) : (
             <span className={`pc-score ${p.sets_b > p.sets_a ? "ganhou" : "perdeu"}`}>{p.sets_b}</span>
           )}
@@ -238,22 +251,31 @@ function MarcaSaque() {
 }
 
 // Stepper de placar: [−] valor [+]. Sem limite superior (>= 0).
+// disabled trava os botoes e o input (usado enquanto o saque nao foi escolhido).
 function Stepper({
   valor,
   onPasso,
   onDigitar,
+  disabled,
 }: {
   valor: string;
   onPasso: (v: string) => void;
   onDigitar: (v: string) => void;
+  disabled?: boolean;
 }) {
   const n = parseInt(valor, 10);
   const num = isNaN(n) ? 0 : n;
   const clamp = (v: number) => String(Math.max(MIN_PLACAR, v));
 
   return (
-    <div className="stepper">
-      <button type="button" className="stepper-btn" onClick={() => onPasso(clamp(num - 1))} aria-label="menos">
+    <div className="stepper" aria-disabled={disabled}>
+      <button
+        type="button"
+        className="stepper-btn"
+        disabled={disabled}
+        onClick={() => onPasso(clamp(num - 1))}
+        aria-label="menos"
+      >
         −
       </button>
       <input
@@ -261,12 +283,19 @@ function Stepper({
         inputMode="numeric"
         placeholder="0"
         value={valor}
+        disabled={disabled}
         onChange={(e) => {
           const so = e.target.value.replace(/\D/g, "");
           onDigitar(so === "" ? "" : clamp(parseInt(so, 10)));
         }}
       />
-      <button type="button" className="stepper-btn" onClick={() => onPasso(clamp(num + 1))} aria-label="mais">
+      <button
+        type="button"
+        className="stepper-btn"
+        disabled={disabled}
+        onClick={() => onPasso(clamp(num + 1))}
+        aria-label="mais"
+      >
         +
       </button>
     </div>
