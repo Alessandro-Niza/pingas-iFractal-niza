@@ -557,6 +557,22 @@ button.btn:focus-visible {
   font-size: 1.05rem;
 }
 
+/* banner de campeao (topo da Classificacao no pontos corridos e na aba Mata-mata) */
+.banner-campeao {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(250, 204, 21, 0.1);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  color: var(--gold);
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
 /* ----- diversos ------------------------------------------- */
 
 .vazio {

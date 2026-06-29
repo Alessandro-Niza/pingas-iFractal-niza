@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Trophy } from "lucide-react";
+import { Trophy, Crown } from "lucide-react";
 import { api, type Jogador, type LinhaClassificacao, type Partida, type Modo } from "../api";
 
 export function Classificacao() {
   const [linhas, setLinhas] = useState<LinhaClassificacao[]>([]);
   const [mata, setMata] = useState<Partida[]>([]);
+  const [partidas, setPartidas] = useState<Partida[]>([]);
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
   const [modo, setModo] = useState<Modo>("pontos_corridos");
   const [modoEf, setModoEf] = useState<Modo>("pontos_corridos");
@@ -16,17 +17,19 @@ export function Classificacao() {
     async function carregar() {
       if (ac.signal.aborted) return;
       try {
-        const [cl, cfg, mm, js] = await Promise.all([
+        const [cl, cfg, mm, js, ps] = await Promise.all([
           api.classificacao(ac.signal),
           api.lerConfig(ac.signal),
           api.listarMataMata(ac.signal),
           api.listarJogadores(ac.signal),
+          api.listarPartidas(ac.signal),
         ]);
         setLinhas(cl);
         setModo(cfg.modo);
         setModoEf(cfg.modo_efetivo);
         setMata(mm);
         setJogadores(js);
+        setPartidas(ps);
         setErro("");
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
@@ -43,6 +46,13 @@ export function Classificacao() {
 
   const nomeDe = (id: number) => jogadores.find((j) => j.id === id)?.nome ?? "?";
   const fallbackGrupos = modo === "grupos" && modoEf !== "grupos";
+
+  // pontos corridos modelo "Brasileirao": o lider vira campeao quando TODOS os jogos
+  // terminam. so vale no pontos corridos de verdade (nao no fallback de grupos incompletos).
+  const partidasGrupos = partidas.filter((p) => p.fase === "grupos");
+  const faseCompleta = partidasGrupos.length > 0 && partidasGrupos.every((p) => p.finalizada);
+  const campeaoPontos =
+    modo === "pontos_corridos" && faseCompleta && linhas.length > 0 ? linhas[0] : null;
 
   const Aviso = () =>
     fallbackGrupos ? (
@@ -95,7 +105,15 @@ export function Classificacao() {
       <section className="card">
         <h2 className="card-title">Classificação geral</h2>
         <Aviso />
-        <Tabela linhas={linhas} />
+        {campeaoPontos && (
+          <div className="banner-campeao">
+            <Trophy size={20} />
+            <span>
+              Campeão: <strong>{campeaoPontos.nome}</strong>
+            </span>
+          </div>
+        )}
+        <Tabela linhas={linhas} campeaoId={campeaoPontos?.jogador_id} />
         {erro && <p className="erro">{erro}</p>}
       </section>
     </>
@@ -155,7 +173,7 @@ function ResumoMata({ mata, nomeDe }: { mata: Partida[]; nomeDe: (id: number) =>
   );
 }
 
-function Tabela({ linhas }: { linhas: LinhaClassificacao[] }) {
+function Tabela({ linhas, campeaoId }: { linhas: LinhaClassificacao[]; campeaoId?: number }) {
   return (
     <table className="tabela">
       <thead>
@@ -179,6 +197,13 @@ function Tabela({ linhas }: { linhas: LinhaClassificacao[] }) {
             <td className="nome-col">
               <span className="avatar">{l.nome[0]?.toUpperCase()}</span>
               {l.nome}
+              {campeaoId === l.jogador_id && (
+                <Crown
+                  size={15}
+                  style={{ color: "var(--gold)", marginLeft: 6, verticalAlign: "-2px" }}
+                  aria-label="Campeão"
+                />
+              )}
             </td>
             <td>{l.jogos}</td>
             <td>{l.vitorias}</td>

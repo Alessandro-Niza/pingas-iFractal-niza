@@ -12,21 +12,6 @@ function rotuloRodada(qtdJogos: number): string {
   return "Rodada";
 }
 
-const campeaoBox = {
-  margin: "0 0 16px",
-  padding: "12px 14px",
-  borderRadius: 8,
-  background: "rgba(250, 204, 21, 0.1)",
-  border: "1px solid rgba(250, 204, 21, 0.35)",
-  color: "var(--gold)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 10,
-  fontSize: "1.05rem",
-  fontWeight: 600,
-} as const;
-
 export function MataMata() {
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
   const [mata, setMata] = useState<Partida[]>([]);
@@ -137,7 +122,7 @@ export function MataMata() {
       {ehGruposSelecionado && (
         <>
           {campeaoId !== null && (
-            <div style={campeaoBox}>
+            <div className="banner-campeao">
               <Trophy size={20} />
               <span>
                 Campeão: <strong>{nomeDe(campeaoId)}</strong>
