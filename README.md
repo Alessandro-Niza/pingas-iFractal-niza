@@ -1,75 +1,187 @@
-# React + TypeScript + Vite
+🏓 Pingas iFractal
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema web para gerenciamento de campeonatos de tênis de mesa, desenvolvido com React + TypeScript + Vite no frontend e FastAPI + SQLite no backend.
 
-Currently, two official plugins are available:
+⸻
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+🚀 Tecnologias
 
-## React Compiler
+Frontend
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+* React
+* TypeScript
+* Vite
+* CSS (Design System próprio)
 
-## Expanding the ESLint configuration
+Backend
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+* FastAPI
+* SQLite
+* Uvicorn
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+⸻
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+📁 Estrutura do projeto
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Pingas_iFractal/
+│
+├── backend/
+│   ├── main.py
+│   ├── db.py
+│   ├── requirements.txt
+│   └── ...
+│
+├── frontend/
+│   ├── src/
+│   ├── package.json
+│   └── ...
+│
+├── docs/
+│
+├── .gitignore
+└── README.md
 
-```
+⸻
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+▶️ Executando o projeto
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. Backend
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Entre na pasta:
 
-```
+cd backend
+
+Ative o ambiente virtual.
+
+macOS / Linux
+
+source .venv/bin/activate
+
+Windows
+
+.venv\Scripts\activate
+
+Instale as dependências:
+
+pip install -r requirements.txt
+
+Execute:
+
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+API disponível em:
+
+http://localhost:8000
+
+Swagger:
+
+http://localhost:8000/docs
+
+⸻
+
+2. Frontend
+
+Entre na pasta:
+
+cd frontend
+
+Instale as dependências:
+
+npm install
+
+Execute:
+
+npm run dev
+
+O Vite normalmente estará disponível em:
+
+http://localhost:5173
+
+⸻
+
+🏆 Funcionalidades
+
+Gerenciamento
+
+* Cadastro de jogadores
+* Cadastro de grupos
+* Geração automática de confrontos
+* Registro de resultados
+* Classificação automática
+* Mata-mata
+* Configurações do torneio
+
+⸻
+
+Classificação
+
+Ordenação automática considerando:
+
+1. Pontos
+2. Saldo de sets
+3. Sets ganhos
+
+⸻
+
+Partidas
+
+* Geração automática de confrontos
+* Edição de placares
+* Validação automática do vencedor
+* Regra oficial do tênis de mesa (vantagem após 10×10)
+
+⸻
+
+📱 Interface
+
+* React + TypeScript
+* Dashboard responsivo
+* Tema Dark
+* Design System próprio
+* Compatível com Desktop, Tablet e Mobile
+
+⸻
+
+💾 Banco de Dados
+
+Durante o desenvolvimento, a aplicação utiliza:
+
+SQLite
+
+Arquivo:
+
+backend/torneio.db
+
+A camada de persistência foi desenvolvida para permitir evolução futura para outros bancos de dados, caso necessário.
+
+⸻
+
+🛣️ Roadmap
+
+✅ MVP
+
+* Cadastro de jogadores
+* Grupos
+* Partidas
+* Classificação
+* Mata-mata
+* Configurações
+
+🚧 Próximas evoluções
+
+* Novo Design System inspirado na identidade visual da NizaWorks
+* Responsividade completa
+* Dashboard Tech
+* Exportação de resultados
+* Banco de dados em nuvem
+* Autenticação de usuários
+* Histórico de campeonatos
+* Estatísticas dos jogadores
+
+⸻
+
+👨‍💻 Autor
+
+Alessandro Niza
+
+Projeto desenvolvido para gerenciamento de campeonatos de tênis de mesa, com foco em simplicidade, desempenho e evolução contínua.
