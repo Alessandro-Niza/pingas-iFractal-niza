@@ -371,7 +371,7 @@ button.btn:focus-visible {
   flex-shrink: 0;
 }
 
-/* ----- partidas ------------------------------------------- */
+/* ----- partidas (card multi-set: melhor de N) ------------- */
 
 .partida {
   padding: 13px 14px;
@@ -382,36 +382,44 @@ button.btn:focus-visible {
 .partida.feita {
   border-color: var(--border);
 }
-/* desktop: layout horizontal (o de sempre) */
-.pc-desktop {
+
+/* cabecalho: jogador A | placar/melhor-de | jogador B */
+.pc-cab {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
-.pc-mobile {
-  display: none;
-}
-.partida .lado {
+.pc-jogador {
   flex: 1;
   display: flex;
   align-items: center;
   gap: 9px;
   min-width: 0;
+  cursor: inherit;
 }
-.partida .lado.b {
+.pc-jogador.b {
   justify-content: flex-end;
 }
-.partida .nome {
+.pc-jogador .nome {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.partida .vs {
-  color: var(--muted-2);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+.pc-cab-meio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
 }
+.pc-melhor-de {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* placar agregado (mostrado quando finalizada) */
 .placar {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
@@ -426,61 +434,71 @@ button.btn:focus-visible {
   color: var(--muted);
 }
 
-/* bloco central do card (placar/steppers + botoes) */
-.partida-acoes {
-  flex-wrap: nowrap;
-  align-items: center;
+/* breakdown dos sets ja jogados (chips) */
+.pc-sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 2px;
+}
+.pc-set-chip {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.pc-set-chip .ganhou {
+  color: var(--win);
+  font-weight: 700;
+}
+.pc-set-chip .perdeu {
+  color: var(--muted);
 }
 
-/* MOBILE: cada jogador na sua linha (avatar + nome + placar/stepper do lado),
-   e as acoes (Salvar/Cancelar ou Editar) numa linha propria embaixo.
-   O desktop nao e afetado. */
-@media (max-width: 760px) {
-  .pc-desktop {
-    display: none;
-  }
-  .pc-mobile {
-    display: block;
-  }
-  .pc-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 7px 0;
-  }
-  .pc-row + .pc-row {
-    border-top: 1px solid var(--border-soft);
-  }
-  .pc-jogador {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    min-width: 0;
-  }
-  .pc-score {
-    font-variant-numeric: tabular-nums;
-    font-weight: 700;
-    font-size: 1.2rem;
-    min-width: 30px;
-    text-align: right;
-  }
-  .pc-score.ganhou {
-    color: var(--win);
-  }
-  .pc-score.perdeu {
-    color: var(--muted);
-  }
-  .pc-acoes {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid var(--border-soft);
-  }
+/* set atual ao vivo + bloco de edicao (cada set numa linha) */
+.pc-set-atual,
+.pc-edicao {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.pc-set-label {
+  font-size: 0.74rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* linha de steppers/acoes do set */
+.partida-acoes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.partida .vs {
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+/* Mata-mata: centraliza os parciais dos sets e o bloco de acoes */
+.partida.is-mata .pc-sets {
+  justify-content: center;
+}
+.partida.is-mata .partida-acoes {
+  justify-content: center;
+}
+
+/* Fase de grupos: Editar + lixeira lado a lado e centralizados
+   (agora que os dois vivem juntos em .partida-acoes) */
+.partida:not(.is-mata) .partida-acoes {
+  justify-content: center;
 }
 
 /* ----- classificacao -------------------------------------- */
@@ -589,6 +607,14 @@ button.btn:focus-visible {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+/* travado: aparencia de bloqueado SEM matar o clique
+   (os botoes seguem clicaveis de proposito, pra disparar o aviso de saque) */
+.stepper.travado {
+  opacity: 0.5;
+}
+.stepper.travado .score-input {
+  cursor: not-allowed;
 }
 .stepper-btn {
   width: 34px;

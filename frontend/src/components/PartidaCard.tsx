@@ -4,11 +4,11 @@ import { api, type Partida } from "../api";
 
 const MIN_PLACAR = 0;
 
-// jogo terminou: alguem chegou a 11+ E abriu 2 de vantagem
-const ehFinalizado = (a: number, b: number) =>
+// um SET terminou: alguem chegou a 11+ E abriu 2 de vantagem (deuce sem limite)
+const setFinalizado = (a: number, b: number) =>
   (a >= 11 || b >= 11) && Math.abs(a - b) >= 2;
 
-// quem saca, pela regra oficial:
+// quem saca DENTRO de um set, pela regra oficial:
 //  - ate 9-9: 2 saques pra cada, alternando
 //  - de 10-10 (deuce) em diante: 1 saque pra cada, alternando
 function quemSaca(a: number, b: number, starter: 0 | 1): 0 | 1 {
@@ -18,20 +18,41 @@ function quemSaca(a: number, b: number, starter: 0 | 1): 0 | 1 {
   return turno === 0 ? starter : ((1 - starter) as 0 | 1);
 }
 
+// sets necessarios pra vencer a partida (melhor de N): 1->1, 3->2, 5->3
+const setsParaVencer = (melhorDe: number) => Math.floor(melhorDe / 2) + 1;
+
+// quem ABRE o saque do set `numero`. Regra oficial: alterna a cada set.
+// >>> ponto de troca facil: o usuario escolhe so o sacador do set 1;
+//     os demais saem derivados daqui. Se um dia quiser escolher set a set,
+//     e aqui que mexe.
+const starterDoSet = (starter: 0 | 1, numero: number): 0 | 1 =>
+  (((starter + (numero - 1)) % 2) as 0 | 1);
+
 const btnSmall = { padding: "6px 12px", fontSize: "0.85rem" } as const;
 
 /**
- * Card de uma partida: placar com auto-save ao vivo, deuce sem limite,
- * indicador de saque e edicao. Usado na fase de grupos e no mata-mata.
- * - onMudou: chamado apos salvar (pai recarrega).
- * - onApagar: se passado, mostra a lixeira (some no mata-mata).
- * - onErro: reporta erro ao pai.
- * - onLimparErro: avisa o pai pra limpar o aviso (ex: ao escolher o saque).
+ * Card de uma partida em "melhor de N sets".
+ *  - melhor_de = 1  -> fase de grupos (set unico, como sempre foi)
+ *  - melhor_de = 3/5 -> mata-mata (serie de sets)
  *
- * Regra: numa partida nova, o placar so libera depois de escolher
- * quem sai com a bola (tocar no nome do jogador). Enquanto nao escolhe,
- * o stepper aparece travado e tocar nele exibe um aviso. Ao escolher,
- * o aviso e limpado.
+ * Estados visuais:
+ *  - AO VIVO (nao finalizada): mostra os sets ja jogados + o set ATUAL num stepper.
+ *    Ao fechar o set (11 + vantagem 2) salva sozinho; o backend recalcula e diz
+ *    se a partida acabou ou se abre o proximo set.
+ *  - FINALIZADA: mostra o agregado (pontos no bo1, sets no bo3/5) + botao Editar.
+ *  - EDICAO: cada set vira um stepper editavel com Salvar proprio.
+ *
+ * Saque: escolhe-se UMA vez (set 1, tocando no nome); os sets seguintes
+ * alternam o sacador automaticamente. Enquanto o set 1 nao tem saque escolhido,
+ * o stepper aparece travado e tocar nele exibe um aviso (limpo via onLimparErro).
+ *
+ * Layout: a classe `is-mata` (quando p.fase === "mata") permite ao CSS
+ * centralizar os parciais e as acoes so no mata-mata, sem afetar os grupos.
+ * As acoes (Editar + lixeira) ficam JUNTAS em .partida-acoes pra alinharem lado a lado.
+ *
+ * >>> Limitacao conhecida: sacaInicial vive so no front (nao e persistido).
+ *     Se a pagina for recarregada no meio de uma serie, o indicador de saque
+ *     some nos sets seguintes (a pontuacao continua funcionando normalmente).
  */
 export function PartidaCard({
   partida: p,
@@ -48,22 +69,74 @@ export function PartidaCard({
   onErro?: (msg: string) => void;
   onLimparErro?: () => void;
 }) {
+  // set "ao vivo" sendo digitado agora
   const [placar, setPlacar] = useState<{ a: string; b: string }>({ a: "", b: "" });
-  const [editando, setEditando] = useState(false);
+  // saque do set 1 (os outros alternam); escolhido tocando no nome
   const [sacaInicial, setSacaInicial] = useState<0 | 1 | undefined>(undefined);
+  // edicao de partida finalizada: numero do set -> placar em string
+  const [editando, setEditando] = useState(false);
+  const [edits, setEdits] = useState<Record<number, { a: string; b: string }>>({});
 
-  async function gravar(a: number, b: number) {
+  // ----- derivados -----
+  const melhorDe = p.melhor_de;
+  const alvo = setsParaVencer(melhorDe);
+  const jogados = p.sets;                  // sets ja salvos, em ordem
+  const numeroAtual = jogados.length + 1;  // set que esta sendo digitado agora
+  const fin = p.finalizada;
+  const podeSaque = !fin && !editando;
+
+  // saque so precisa ser escolhido no SET 1; depois alterna sozinho
+  const precisaEscolherSaque = podeSaque && numeroAtual === 1 && sacaInicial === undefined;
+
+  const aLive = parseInt(placar.a || "0", 10);
+  const bLive = parseInt(placar.b || "0", 10);
+  const starterAtual =
+    sacaInicial === undefined ? undefined : starterDoSet(sacaInicial, numeroAtual);
+  const saca: 0 | 1 | null =
+    podeSaque && starterAtual !== undefined ? quemSaca(aLive, bLive, starterAtual) : null;
+
+  // placar mostrado no cabecalho quando finalizada:
+  //  - bo1: os PONTOS do set unico (ex: 11 : 8)
+  //  - bo3/5: a contagem de SETS (ex: 2 : 1)
+  const placarCab =
+    melhorDe === 1 && jogados[0]
+      ? `${jogados[0].pontos_a} : ${jogados[0].pontos_b}`
+      : `${p.sets_a} : ${p.sets_b}`;
+
+  const nomeA = nomeDe(p.jogador_a_id);
+  const nomeB = nomeDe(p.jogador_b_id);
+
+  // ----- acoes -----
+  async function gravarSet(numero: number, a: number, b: number) {
     try {
-      await api.registrarResultado(p.id, a, b);
-      setEditando(false);
+      await api.registrarSet(p.id, numero, a, b);
+      setPlacar({ a: "", b: "" }); // zera pro proximo set comecar limpo
       onMudou();
     } catch (e) {
       onErro?.((e as Error).message);
     }
   }
 
-  // botao Salvar (digitacao): valida antes de gravar
-  function salvar() {
+  // +/- ao vivo no set atual: atualiza e, se o set fechou, salva sozinho
+  function passo(lado: "a" | "b", valor: string) {
+    if (precisaEscolherSaque) {
+      onErro?.("Necessário escolher quem começa sacando.");
+      return;
+    }
+    const novo = { ...placar, [lado]: valor };
+    setPlacar(novo);
+    const a = parseInt(novo.a || "0", 10);
+    const b = parseInt(novo.b || "0", 10);
+    if (setFinalizado(a, b)) gravarSet(numeroAtual, a, b);
+  }
+
+  // digitacao manual: NAO dispara auto-save
+  function digitar(lado: "a" | "b", valor: string) {
+    setPlacar((prev) => ({ ...prev, [lado]: valor }));
+  }
+
+  // botao Salvar do set atual (quando o placar foi digitado em vez de +/-)
+  function salvarManual() {
     if (precisaEscolherSaque) {
       onErro?.("Necessário escolher quem começa sacando.");
       return;
@@ -74,172 +147,152 @@ export function PartidaCard({
       onErro?.("Preencha os dois placares.");
       return;
     }
-    if (!ehFinalizado(a, b)) {
-      onErro?.("Partida ainda não terminou. Em caso de 10 × 10, vence quem abrir 2 pontos de vantagem.");
+    if (!setFinalizado(a, b)) {
+      onErro?.("Set ainda não terminou. Em 10 × 10, vence quem abrir 2 pontos de vantagem.");
       return;
     }
-    gravar(a, b);
+    gravarSet(numeroAtual, a, b);
   }
 
-  // +/− ao vivo: atualiza e, se finalizou, salva sozinho
-  function passo(lado: "a" | "b", valor: string) {
-    if (precisaEscolherSaque) {
-      onErro?.("Necessário escolher quem começa sacando.");
-      return;
-    }
-    const novo = { ...placar, [lado]: valor };
-    setPlacar(novo);
-    const a = parseInt(novo.a || "0", 10);
-    const b = parseInt(novo.b || "0", 10);
-    if (ehFinalizado(a, b)) gravar(a, b);
-  }
-
-  // digitacao manual: NAO dispara auto-save
-  function digitar(lado: "a" | "b", valor: string) {
-    setPlacar((prev) => ({ ...prev, [lado]: valor }));
-  }
-
-  function abrirEdicao() {
-    setPlacar({ a: String(p.sets_a), b: String(p.sets_b) });
-    setEditando(true);
-  }
-
-  // escolhe quem saca primeiro e limpa o aviso (a condicao do erro deixou de existir)
+  // escolhe o sacador do set 1 e limpa o aviso (a condicao do erro deixou de existir)
   function escolherSaque(lado: 0 | 1) {
     setSacaInicial(lado);
     onLimparErro?.();
   }
 
-  const emEdicao = !p.finalizada || editando;
-  const podeSaque = !p.finalizada;
-  // partida nova ainda sem saque definido: trava o placar
-  const precisaEscolherSaque = podeSaque && sacaInicial === undefined;
-  const a = parseInt(placar.a || "0", 10);
-  const b = parseInt(placar.b || "0", 10);
-  const saca: 0 | 1 | null =
-    podeSaque && sacaInicial !== undefined ? quemSaca(a, b, sacaInicial) : null;
+  // ----- edicao de partida finalizada -----
+  function abrirEdicao() {
+    const m: Record<number, { a: string; b: string }> = {};
+    for (const s of jogados) m[s.numero] = { a: String(s.pontos_a), b: String(s.pontos_b) };
+    setEdits(m);
+    setEditando(true);
+  }
 
-  const nomeA = nomeDe(p.jogador_a_id);
-  const nomeB = nomeDe(p.jogador_b_id);
+  async function salvarEdicaoSet(numero: number) {
+    const e = edits[numero];
+    const a = parseInt(e?.a ?? "", 10);
+    const b = parseInt(e?.b ?? "", 10);
+    if (isNaN(a) || isNaN(b)) {
+      onErro?.("Preencha os dois placares.");
+      return;
+    }
+    if (!setFinalizado(a, b)) {
+      onErro?.("Set inválido. Em 10 × 10, vence quem abrir 2 pontos de vantagem.");
+      return;
+    }
+    try {
+      await api.registrarSet(p.id, numero, a, b);
+      onMudou();
+    } catch (err) {
+      onErro?.((err as Error).message);
+    }
+  }
 
   const estiloNome = (lado: 0 | 1) =>
     ({
       color: saca === lado ? "var(--accent)" : undefined,
       fontWeight: saca === lado ? 600 : undefined,
       cursor: podeSaque ? "pointer" : undefined,
-      textDecoration: podeSaque && sacaInicial === undefined ? "underline dotted" : undefined,
+      // dica visual de "toque pra escolher" so enquanto falta escolher o saque do set 1
+      textDecoration: precisaEscolherSaque ? "underline dotted" : undefined,
       textDecorationColor: "var(--muted-2)",
       textUnderlineOffset: 4,
     }) as const;
-  const aoTocarLado = (lado: 0 | 1) => (podeSaque ? () => escolherSaque(lado) : undefined);
-  const tituloSaque = podeSaque ? "Tocar pra marcar quem saca primeiro" : undefined;
+
+  const aoTocar = (lado: 0 | 1) => (podeSaque ? () => escolherSaque(lado) : undefined);
+  const titulo = podeSaque ? "Tocar pra marcar quem saca primeiro" : undefined;
+
+  // botao lixeira (reusado no bloco de acoes); so aparece se onApagar veio (grupos)
+  const botaoApagar = onApagar ? (
+    <button
+      className="btn ghost"
+      style={{ ...btnSmall, color: "var(--loss)", display: "inline-flex", alignItems: "center", padding: "6px 10px" }}
+      onClick={() => onApagar(p)}
+      aria-label="Apagar esta partida"
+      title="Apagar esta partida"
+    >
+      <Trash2 size={16} />
+    </button>
+  ) : null;
 
   return (
-    <div className={`partida ${p.finalizada ? "feita" : ""}`}>
-      {/* ===== DESKTOP (>= 761px): layout horizontal atual, intacto ===== */}
-      <div className="pc-desktop">
-        <div className="lado" onClick={aoTocarLado(0)} title={tituloSaque}>
+    <div className={`partida ${fin ? "feita" : ""} ${p.fase === "mata" ? "is-mata" : ""}`}>
+      {/* cabecalho: jogadores + (se finalizada) placar agregado */}
+      <div className="pc-cab">
+        <span className="pc-jogador" onClick={aoTocar(0)} title={titulo}>
           <span className="avatar">{nomeA[0]?.toUpperCase()}</span>
           <span className="nome" style={estiloNome(0)}>{nomeA}</span>
           {saca === 0 && <MarcaSaque />}
-        </div>
+        </span>
 
-        {emEdicao ? (
+        <span className="pc-cab-meio">
+          {fin && !editando ? (
+            <span className="placar">{placarCab}</span>
+          ) : melhorDe > 1 ? (
+            <span className="pc-melhor-de">melhor de {melhorDe}</span>
+          ) : null}
+        </span>
+
+        <span className="pc-jogador b" onClick={aoTocar(1)} title={titulo}>
+          {saca === 1 && <MarcaSaque />}
+          <span className="nome" style={estiloNome(1)}>{nomeB}</span>
+          <span className="avatar">{nomeB[0]?.toUpperCase()}</span>
+        </span>
+      </div>
+
+      {/* breakdown dos sets ja jogados (so faz sentido em serie) */}
+      {melhorDe > 1 && !editando && jogados.length > 0 && (
+        <div className="pc-sets">
+          {jogados.map((s) => (
+            <span key={s.numero} className="pc-set-chip" title={`Set ${s.numero}`}>
+              <span className={s.pontos_a > s.pontos_b ? "ganhou" : "perdeu"}>{s.pontos_a}</span>
+              {"-"}
+              <span className={s.pontos_b > s.pontos_a ? "ganhou" : "perdeu"}>{s.pontos_b}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* corpo: edicao | (finalizada -> Editar + lixeira) | set atual ao vivo */}
+      {editando ? (
+        <div className="pc-edicao">
+          {jogados.map((s) => {
+            const e = edits[s.numero] ?? { a: String(s.pontos_a), b: String(s.pontos_b) };
+            const set = (campo: "a" | "b") => (v: string) =>
+              setEdits((prev) => ({ ...prev, [s.numero]: { ...e, [campo]: v } }));
+            return (
+              <div className="row partida-acoes" key={s.numero}>
+                {melhorDe > 1 && <span className="pc-set-label">Set {s.numero}</span>}
+                <Stepper valor={e.a} onPasso={set("a")} onDigitar={set("a")} />
+                <span className="vs">x</span>
+                <Stepper valor={e.b} onPasso={set("b")} onDigitar={set("b")} />
+                <button className="btn ghost" style={btnSmall} onClick={() => salvarEdicaoSet(s.numero)}>
+                  Salvar
+                </button>
+              </div>
+            );
+          })}
+          <button className="btn ghost" style={btnSmall} onClick={() => setEditando(false)}>
+            Concluir
+          </button>
+        </div>
+      ) : fin ? (
+        <div className="row partida-acoes">
+          <button className="btn ghost" style={btnSmall} onClick={abrirEdicao}>Editar</button>
+          {botaoApagar}
+        </div>
+      ) : (
+        <div className="pc-set-atual">
+          {melhorDe > 1 && <span className="pc-set-label">Set {numeroAtual}</span>}
           <div className="row partida-acoes">
             <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} travado={precisaEscolherSaque} />
             <span className="vs">x</span>
             <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} travado={precisaEscolherSaque} />
-            <button className="btn ghost" style={btnSmall} onClick={salvar}>Salvar</button>
-            {p.finalizada && (
-              <button className="btn ghost" style={btnSmall} onClick={() => setEditando(false)}>
-                Cancelar
-              </button>
-            )}
+            <button className="btn ghost" style={btnSmall} onClick={salvarManual}>Salvar</button>
+            {botaoApagar}
           </div>
-        ) : (
-          <div className="row partida-acoes">
-            <div className="placar">
-              <span className={p.sets_a > p.sets_b ? "ganhou" : "perdeu"}>{p.sets_a}</span>
-              {" : "}
-              <span className={p.sets_b > p.sets_a ? "ganhou" : "perdeu"}>{p.sets_b}</span>
-            </div>
-            <button className="btn ghost" style={btnSmall} onClick={abrirEdicao}>Editar</button>
-          </div>
-        )}
-
-        <div className="lado b" onClick={aoTocarLado(1)} title={tituloSaque}>
-          {saca === 1 && <MarcaSaque />}
-          <span className="nome" style={estiloNome(1)}>{nomeB}</span>
-          <span className="avatar">{nomeB[0]?.toUpperCase()}</span>
         </div>
-
-        {onApagar && (
-          <button
-            className="btn ghost"
-            style={{ ...btnSmall, color: "var(--loss)", display: "inline-flex", alignItems: "center", padding: "6px 10px" }}
-            onClick={() => onApagar(p)}
-            aria-label="Apagar esta partida"
-            title="Apagar esta partida"
-          >
-            <Trash2 size={16} />
-          </button>
-        )}
-      </div>
-
-      {/* ===== MOBILE (<= 760px): cada jogador na sua linha com o placar do lado ===== */}
-      <div className="pc-mobile">
-        <div className="pc-row">
-          <span className="pc-jogador" onClick={aoTocarLado(0)} title={tituloSaque}>
-            <span className="avatar">{nomeA[0]?.toUpperCase()}</span>
-            <span className="nome" style={estiloNome(0)}>{nomeA}</span>
-            {saca === 0 && <MarcaSaque />}
-          </span>
-          {emEdicao ? (
-            <Stepper valor={placar.a} onPasso={(v) => passo("a", v)} onDigitar={(v) => digitar("a", v)} travado={precisaEscolherSaque} />
-          ) : (
-            <span className={`pc-score ${p.sets_a > p.sets_b ? "ganhou" : "perdeu"}`}>{p.sets_a}</span>
-          )}
-        </div>
-
-        <div className="pc-row">
-          <span className="pc-jogador" onClick={aoTocarLado(1)} title={tituloSaque}>
-            <span className="avatar">{nomeB[0]?.toUpperCase()}</span>
-            <span className="nome" style={estiloNome(1)}>{nomeB}</span>
-            {saca === 1 && <MarcaSaque />}
-          </span>
-          {emEdicao ? (
-            <Stepper valor={placar.b} onPasso={(v) => passo("b", v)} onDigitar={(v) => digitar("b", v)} travado={precisaEscolherSaque} />
-          ) : (
-            <span className={`pc-score ${p.sets_b > p.sets_a ? "ganhou" : "perdeu"}`}>{p.sets_b}</span>
-          )}
-        </div>
-
-        <div className="pc-acoes">
-          {emEdicao ? (
-            <>
-              <button className="btn ghost" style={btnSmall} onClick={salvar}>Salvar</button>
-              {p.finalizada && (
-                <button className="btn ghost" style={btnSmall} onClick={() => setEditando(false)}>
-                  Cancelar
-                </button>
-              )}
-            </>
-          ) : (
-            <button className="btn ghost" style={btnSmall} onClick={abrirEdicao}>Editar</button>
-          )}
-          {onApagar && (
-            <button
-              className="btn ghost"
-              style={{ ...btnSmall, color: "var(--loss)", display: "inline-flex", alignItems: "center", padding: "6px 10px" }}
-              onClick={() => onApagar(p)}
-              aria-label="Apagar esta partida"
-              title="Apagar esta partida"
-            >
-              <Trash2 size={16} />
-            </button>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -281,12 +334,7 @@ function Stepper({
 
   return (
     <div className={`stepper ${travado ? "travado" : ""}`} aria-disabled={travado}>
-      <button
-        type="button"
-        className="stepper-btn"
-        onClick={() => onPasso(clamp(num - 1))}
-        aria-label="menos"
-      >
+      <button type="button" className="stepper-btn" onClick={() => onPasso(clamp(num - 1))} aria-label="menos">
         −
       </button>
       <input
@@ -300,12 +348,7 @@ function Stepper({
           onDigitar(so === "" ? "" : clamp(parseInt(so, 10)));
         }}
       />
-      <button
-        type="button"
-        className="stepper-btn"
-        onClick={() => onPasso(clamp(num + 1))}
-        aria-label="mais"
-      >
+      <button type="button" className="stepper-btn" onClick={() => onPasso(clamp(num + 1))} aria-label="mais">
         +
       </button>
     </div>

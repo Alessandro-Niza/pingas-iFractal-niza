@@ -120,13 +120,16 @@ export function Classificacao() {
   );
 }
 
-// Resumo do chaveamento (semis -> final -> campeao). Some quando nao ha mata-mata.
+// Resumo do chaveamento: um CARD por rodada (Final, Semifinais, ...), da mais
+// recente pra mais antiga. O banner de campeao fica por fora, antes dos cards.
+// Some quando nao ha mata-mata.
 function ResumoMata({ mata, nomeDe }: { mata: Partida[]; nomeDe: (id: number) => string }) {
   if (mata.length === 0) return null;
 
   const rodadas = Array.from(new Set(mata.map((p) => p.rodada ?? 0))).sort((a, b) => a - b);
   const ultima = rodadas[rodadas.length - 1];
   const final = mata.filter((p) => p.rodada === ultima);
+  // campeao = vencedor da final (ultima rodada com 1 jogo) se ja finalizada
   const campeaoId =
     final.length === 1 && final[0].finalizada
       ? final[0].sets_a > final[0].sets_b
@@ -137,11 +140,24 @@ function ResumoMata({ mata, nomeDe }: { mata: Partida[]; nomeDe: (id: number) =>
   const rotulo = (q: number) =>
     q === 1 ? "Final" : q === 2 ? "Semifinais" : q === 4 ? "Quartas de final" : q === 8 ? "Oitavas de final" : "Rodada";
 
+  const linhaJogo = (p: Partida) => {
+    const aVenc = p.finalizada && p.sets_a > p.sets_b;
+    const bVenc = p.finalizada && p.sets_b > p.sets_a;
+    return (
+      <div className="resumo-jogo" key={p.id}>
+        <span className={`nome-a ${aVenc ? "venc" : ""}`}>{nomeDe(p.jogador_a_id)}</span>
+        <span className="placar-mini">
+          {p.finalizada ? `${p.sets_a} : ${p.sets_b}` : "—"}
+        </span>
+        <span className={`nome-b ${bVenc ? "venc" : ""}`}>{nomeDe(p.jogador_b_id)}</span>
+      </div>
+    );
+  };
+
   return (
-    <section className="card resumo-mata">
-      <h2 className="card-title">Mata-mata</h2>
+    <>
       {campeaoId !== null && (
-        <div className="resumo-campeao">
+        <div className="banner-campeao">
           <Trophy size={18} />
           <span>
             Campeão: <strong>{nomeDe(campeaoId)}</strong>
@@ -151,28 +167,19 @@ function ResumoMata({ mata, nomeDe }: { mata: Partida[]; nomeDe: (id: number) =>
       {[...rodadas].reverse().map((r) => {
         const jogos = mata.filter((p) => p.rodada === r);
         return (
-          <div key={r}>
-            <div className="rodada-titulo">{rotulo(jogos.length)}</div>
-            {jogos.map((p) => {
-              const aVenc = p.finalizada && p.sets_a > p.sets_b;
-              const bVenc = p.finalizada && p.sets_b > p.sets_a;
-              return (
-                <div className="resumo-jogo" key={p.id}>
-                  <span className={`nome-a ${aVenc ? "venc" : ""}`}>{nomeDe(p.jogador_a_id)}</span>
-                  <span className="placar-mini">
-                    {p.finalizada ? `${p.sets_a} : ${p.sets_b}` : "—"}
-                  </span>
-                  <span className={`nome-b ${bVenc ? "venc" : ""}`}>{nomeDe(p.jogador_b_id)}</span>
-                </div>
-              );
-            })}
-          </div>
+          <section className="card resumo-mata" key={r}>
+            <h2 className="card-title">{rotulo(jogos.length)}</h2>
+            {jogos.map(linhaJogo)}
+          </section>
         );
       })}
-    </section>
+    </>
   );
 }
 
+// Tabela de classificacao. As colunas "Sets" e "Saldo" foram removidas:
+// como cada jogo e set unico (melhor de 1), "sets ganhos" so daria 1:0 ou 0:1,
+// que e redundante com V/D. Restam #, Jogador, J, V, D, Pts.
 function Tabela({ linhas, campeaoId }: { linhas: LinhaClassificacao[]; campeaoId?: number }) {
   return (
     <table className="tabela">
@@ -183,8 +190,6 @@ function Tabela({ linhas, campeaoId }: { linhas: LinhaClassificacao[]; campeaoId
           <th>J</th>
           <th>V</th>
           <th>D</th>
-          <th className="hide-sm">Sets</th>
-          <th className="hide-sm">Saldo</th>
           <th>Pts</th>
         </tr>
       </thead>
@@ -208,13 +213,6 @@ function Tabela({ linhas, campeaoId }: { linhas: LinhaClassificacao[]; campeaoId
             <td>{l.jogos}</td>
             <td>{l.vitorias}</td>
             <td>{l.derrotas}</td>
-            <td className="hide-sm">
-              {l.sets_ganhos}:{l.sets_perdidos}
-            </td>
-            <td className="hide-sm">
-              {l.saldo_sets > 0 ? "+" : ""}
-              {l.saldo_sets}
-            </td>
             <td className="pts">{l.pontos}</td>
           </tr>
         ))}

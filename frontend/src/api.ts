@@ -5,15 +5,24 @@ export interface Jogador {
   grupo: string | null;
 }
 
+// Um set individual de uma partida (pontos daquele set).
+export interface SetJogo {
+  numero: number;
+  pontos_a: number;
+  pontos_b: number;
+}
+
 export interface Partida {
   id: number;
   jogador_a_id: number;
   jogador_b_id: number;
-  sets_a: number;
-  sets_b: number;
+  sets_a: number;        // CACHE: sets VENCIDOS por A (nao mais pontos!)
+  sets_b: number;        // CACHE: sets VENCIDOS por B
   finalizada: boolean;
   fase: "grupos" | "mata";
   rodada: number | null;
+  melhor_de: number;     // 1 (grupos), 3 (semis), 5 (final)
+  sets: SetJogo[];       // sets ja jogados, em ordem
 }
 
 export interface LinhaClassificacao {
@@ -31,9 +40,6 @@ export interface LinhaClassificacao {
 
 export type Modo = "pontos_corridos" | "grupos";
 
-// Em dev, fala com o backend no MESMO host que abriu a pagina (porta 8000).
-// Assim funciona tanto no Mac (localhost) quanto no celular (http://<ip>:5173 -> :8000).
-// Em producao (build servido pelo FastAPI), caminho relativo = mesma origem.
 const API_BASE = import.meta.env.DEV ? `http://${location.hostname}:8000` : "";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -50,7 +56,6 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  // config / modo do torneio
   lerConfig: (signal?: AbortSignal) =>
     req<{ modo: Modo; modo_efetivo: Modo }>("/config", { signal }),
   definirModo: (modo: Modo) =>
@@ -59,7 +64,6 @@ export const api = {
       body: JSON.stringify({ modo }),
     }),
 
-  // jogadores
   listarJogadores: (signal?: AbortSignal) => req<Jogador[]>("/jogadores", { signal }),
   criarJogador: (nome: string) =>
     req<Jogador>("/jogadores", { method: "POST", body: JSON.stringify({ nome }) }),
@@ -71,32 +75,30 @@ export const api = {
   deletarJogador: (id: number) =>
     req<void>(`/jogadores/${id}`, { method: "DELETE" }),
 
-  // partidas
   listarPartidas: (signal?: AbortSignal) => req<Partida[]>("/partidas", { signal }),
   criarPartida: (jogador_a_id: number, jogador_b_id: number) =>
     req<Partida>("/partidas", {
       method: "POST",
       body: JSON.stringify({ jogador_a_id, jogador_b_id }),
     }),
-  registrarResultado: (id: number, sets_a: number, sets_b: number) =>
-    req<Partida>(`/partidas/${id}/resultado`, {
-      method: "PATCH",
-      body: JSON.stringify({ sets_a, sets_b }),
+  // registra/edita UM set; o backend recalcula a partida e diz se acabou.
+  // (substituiu o antigo registrarResultado, que mandava "o placar" de uma vez)
+  registrarSet: (partidaId: number, numero: number, pontos_a: number, pontos_b: number) =>
+    req<Partida>(`/partidas/${partidaId}/sets/${numero}`, {
+      method: "PUT",
+      body: JSON.stringify({ pontos_a, pontos_b }),
     }),
   deletarPartida: (id: number) =>
     req<void>(`/partidas/${id}`, { method: "DELETE" }),
   limparPartidas: () => req<void>("/partidas", { method: "DELETE" }),
 
-  // mata-mata (eliminatorias apos a fase de grupos)
   listarMataMata: (signal?: AbortSignal) => req<Partida[]>("/mata-mata", { signal }),
   iniciarMataMata: () => req<Partida[]>("/mata-mata/iniciar", { method: "POST" }),
   limparMataMata: () => req<void>("/mata-mata", { method: "DELETE" }),
 
-  // classificacao (ja vem ciente do modo, calculada no backend)
   classificacao: (signal?: AbortSignal) =>
     req<LinhaClassificacao[]>("/classificacao", { signal }),
 
-  // exportacao: baixa o campeonato como zip de HTMLs estaticos (offline)
   exportar: async (): Promise<Blob> => {
     const res = await fetch(API_BASE + "/exportar");
     if (!res.ok) {

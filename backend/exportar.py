@@ -11,6 +11,10 @@ Gera um zip com a estrutura:
 Os HTMLs nao dependem de internet nem do sistema: abrem em qualquer navegador.
 Este modulo NAO fala com o banco — recebe os dados ja prontos do main.py
 (evita import circular e mantem a regra de negocio num lugar so).
+
+MODELO DE SETS: cada partida chega com a lista `sets` embutida. O placar exibido e:
+  - melhor_de == 1 (grupos): os PONTOS do set unico (ex: 11 : 8)
+  - melhor_de  > 1 (mata-mata): a CONTAGEM de sets (ex: 2 : 1), com os parciais por baixo
 """
 import io
 import html
@@ -62,6 +66,26 @@ def _doc(titulo: str, ativo: str, corpo: str, agora: str) -> str:
 
 def _banner_campeao(nome: str) -> str:
     return f'<div class="banner-campeao">🏆 Campeão: <strong>{html.escape(nome)}</strong></div>'
+
+
+# placar agregado de uma partida finalizada, ja ciente do modelo de sets.
+def _placar_partida(p) -> str:
+    if not p["finalizada"]:
+        return "—"
+    sets = p.get("sets") or []
+    if p.get("melhor_de", 1) == 1 and sets:
+        s = sets[0]
+        return f'{s["pontos_a"]} : {s["pontos_b"]}'   # bo1: pontos do set unico
+    return f'{p["sets_a"]} : {p["sets_b"]}'           # bo3/5: contagem de sets
+
+
+# parciais "11-8 9-11 11-6" de uma serie (so faz sentido em melhor de > 1)
+def _parciais(p) -> str:
+    sets = p.get("sets") or []
+    if not (p["finalizada"] and p.get("melhor_de", 1) > 1 and sets):
+        return ""
+    chips = " ".join(f'{s["pontos_a"]}-{s["pontos_b"]}' for s in sets)
+    return f'<div class="sets-detalhe">{html.escape(chips)}</div>'
 
 
 def _tabela(linhas: list, campeao_id=None) -> str:
@@ -151,13 +175,14 @@ def _partidas_html(partidas, jogadores, agora) -> str:
 
     linhas = []
     for p in partidas:  # ja vem ordenado por id = ordem cronologica de criacao
-        placar = f'{p["sets_a"]} : {p["sets_b"]}' if p["finalizada"] else "—"
+        placar = _placar_partida(p)
+        parciais = _parciais(p)  # vazio na fase de grupos; parciais "11-8 9-11" no mata-mata
         linhas.append(
             "<tr>"
             f'<td class="esq"><span class="badge">{fase_label(p)}</span></td>'
             f"<td>{html.escape(grupo_label(p))}</td>"
             f'<td class="esq">{html.escape(nome_de.get(p["jogador_a_id"], "?"))}</td>'
-            f'<td class="placar-cell">{placar}</td>'
+            f'<td class="placar-cell">{placar}{parciais}</td>'
             f'<td class="esq">{html.escape(nome_de.get(p["jogador_b_id"], "?"))}</td>'
             "</tr>"
         )
@@ -197,13 +222,15 @@ def _matamata_html(mata, jogadores, campeao_nome, agora) -> str:
         for p in jogos:
             a_venc = p["finalizada"] and p["sets_a"] > p["sets_b"]
             b_venc = p["finalizada"] and p["sets_b"] > p["sets_a"]
-            placar = f'{p["sets_a"]} : {p["sets_b"]}' if p["finalizada"] else "—"
+            placar = _placar_partida(p)
+            parciais = _parciais(p)  # parciais "11-8 9-11 11-6" da serie
             linhas.append(
                 '<div class="jogo">'
                 f'<span class="lado a{" venc" if a_venc else ""}">{html.escape(nome_de.get(p["jogador_a_id"], "?"))}</span>'
                 f'<span class="placar-mini">{placar}</span>'
                 f'<span class="lado b{" venc" if b_venc else ""}">{html.escape(nome_de.get(p["jogador_b_id"], "?"))}</span>'
                 "</div>"
+                f"{parciais}"
             )
         blocos.append(f'<div class="rodada-titulo">{_rotulo_rodada(len(jogos))}</div>{"".join(linhas)}')
 
@@ -292,6 +319,7 @@ body {
 .tabela td.esq { text-align: left; }
 .tabela td.pts { color: var(--accent); font-weight: 700; }
 .tabela td.placar-cell { font-weight: 700; }
+.sets-detalhe { font-weight: 400; font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
 .pos {
   display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 7px;
   background: rgba(255,255,255,0.05); color: var(--muted); font-weight: 700; font-size: 0.8rem;
@@ -326,6 +354,8 @@ body {
 .jogo .placar-mini {
   color: var(--muted); font-variant-numeric: tabular-nums; min-width: 48px; text-align: center;
 }
+/* parciais da serie, centralizado abaixo do confronto */
+.jogo + .sets-detalhe { text-align: center; margin: -2px 0 6px; }
 
 .vazio { color: var(--muted); text-align: center; padding: 28px 12px; }
 
@@ -357,6 +387,7 @@ body {
   .banner-campeao { background: transparent; border-color: #caa; color: #9a7d00; }
   .pos { background: #eee; color: #333; }
   .tabela tr.lider .pos { background: #1d4ed8; color: #fff; }
+  .sets-detalhe { color: #555; }
 }
 """
 

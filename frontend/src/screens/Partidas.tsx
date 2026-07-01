@@ -98,6 +98,9 @@ export function Partidas() {
     }
   }
 
+  // apagar partida individual: so faz sentido no pontos corridos.
+  // na fase de grupos, remover um confronto isolado deixa o grupo incompleto
+  // (o "todos contra todos" quebra), por isso a lixeira nem aparece la (ver cardDe).
   async function apagar(p: Partida) {
     const ok = window.confirm(
       `Apagar a partida ${nomeDe(p.jogador_a_id)} x ${nomeDe(p.jogador_b_id)}?`
@@ -130,17 +133,19 @@ export function Partidas() {
   const fallbackGrupos = modo === "grupos" && modoEf !== "grupos";
   const podeGerar = ehGrupos || jogadores.length >= 2;
 
+  // lixeira individual so no pontos corridos: em grupos, onApagar vai undefined
+  // e o PartidaCard esconde a lixeira sozinho (Editar fica centralizado).
   const cardDe = (p: Partida) => (
-  <PartidaCard
-    key={p.id}
-    partida={p}
-    nomeDe={nomeDe}
-    onMudou={recarregar}
-    onApagar={apagar}
-    onErro={setErro}
-    onLimparErro={() => setErro("")}
-  />
-);
+    <PartidaCard
+      key={p.id}
+      partida={p}
+      nomeDe={nomeDe}
+      onMudou={recarregar}
+      onErro={setErro}
+      onLimparErro={() => setErro("")}
+      onApagar={ehGrupos ? undefined : apagar}
+    />
+  );
 
   return (
     <section className="card">

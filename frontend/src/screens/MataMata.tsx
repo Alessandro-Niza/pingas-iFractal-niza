@@ -170,6 +170,7 @@ export function MataMata() {
                           nomeDe={nomeDe}
                           onMudou={recarregar}
                           onErro={setErro}
+                          onLimparErro={() => setErro("")}
                         />
                       ))}
                     </div>
