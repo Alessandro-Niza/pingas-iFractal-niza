@@ -4,13 +4,9 @@ import { api, type Partida } from "../api";
 
 const MIN_PLACAR = 0;
 
-// um SET terminou: alguem chegou a 11+ E abriu 2 de vantagem (deuce sem limite)
 const setFinalizado = (a: number, b: number) =>
   (a >= 11 || b >= 11) && Math.abs(a - b) >= 2;
 
-// quem saca DENTRO de um set, pela regra oficial:
-//  - ate 9-9: 2 saques pra cada, alternando
-//  - de 10-10 (deuce) em diante: 1 saque pra cada, alternando
 function quemSaca(a: number, b: number, starter: 0 | 1): 0 | 1 {
   const total = a + b;
   const deuce = a >= 10 && b >= 10;
@@ -18,13 +14,8 @@ function quemSaca(a: number, b: number, starter: 0 | 1): 0 | 1 {
   return turno === 0 ? starter : ((1 - starter) as 0 | 1);
 }
 
-// sets necessarios pra vencer a partida (melhor de N): 1->1, 3->2, 5->3
 const setsParaVencer = (melhorDe: number) => Math.floor(melhorDe / 2) + 1;
 
-// quem ABRE o saque do set `numero`. Regra oficial: alterna a cada set.
-// >>> ponto de troca facil: o usuario escolhe so o sacador do set 1;
-//     os demais saem derivados daqui. Se um dia quiser escolher set a set,
-//     e aqui que mexe.
 const starterDoSet = (starter: 0 | 1, numero: number): 0 | 1 =>
   (((starter + (numero - 1)) % 2) as 0 | 1);
 
@@ -32,27 +23,12 @@ const btnSmall = { padding: "6px 12px", fontSize: "0.85rem" } as const;
 
 /**
  * Card de uma partida em "melhor de N sets".
- *  - melhor_de = 1  -> fase de grupos (set unico, como sempre foi)
- *  - melhor_de = 3/5 -> mata-mata (serie de sets)
+ *  - melhor_de = 1  -> fase de grupos (set unico) [legado; grupos agora usam 3]
+ *  - melhor_de = 3/5 -> serie (grupos bo3, semis bo3, final bo5)
  *
- * Estados visuais:
- *  - AO VIVO (nao finalizada): mostra os sets ja jogados + o set ATUAL num stepper.
- *    Ao fechar o set (11 + vantagem 2) salva sozinho; o backend recalcula e diz
- *    se a partida acabou ou se abre o proximo set.
- *  - FINALIZADA: mostra o agregado (pontos no bo1, sets no bo3/5) + botao Editar.
- *  - EDICAO: cada set vira um stepper editavel com Salvar proprio.
- *
- * Saque: escolhe-se UMA vez (set 1, tocando no nome); os sets seguintes
- * alternam o sacador automaticamente. Enquanto o set 1 nao tem saque escolhido,
- * o stepper aparece travado e tocar nele exibe um aviso (limpo via onLimparErro).
- *
- * Layout: a classe `is-mata` (quando p.fase === "mata") permite ao CSS
- * centralizar os parciais e as acoes so no mata-mata, sem afetar os grupos.
- * As acoes (Editar + lixeira) ficam JUNTAS em .partida-acoes pra alinharem lado a lado.
- *
- * >>> Limitacao conhecida: sacaInicial vive so no front (nao e persistido).
- *     Se a pagina for recarregada no meio de uma serie, o indicador de saque
- *     some nos sets seguintes (a pontuacao continua funcionando normalmente).
+ * Saque persistido no backend (p.saca_inicial): sobrevive a reload.
+ * Destaque de vencedor: nome + parciais ganhos em AZUL (var(--accent)).
+ * A taca (🏆) NAO aparece mais por partida — fica so no banner do campeao do torneio.
  */
 export function PartidaCard({
   partida: p,
@@ -69,35 +45,37 @@ export function PartidaCard({
   onErro?: (msg: string) => void;
   onLimparErro?: () => void;
 }) {
-  // set "ao vivo" sendo digitado agora
   const [placar, setPlacar] = useState<{ a: string; b: string }>({ a: "", b: "" });
-  // saque do set 1 (os outros alternam); escolhido tocando no nome
-  const [sacaInicial, setSacaInicial] = useState<0 | 1 | undefined>(undefined);
-  // edicao de partida finalizada: numero do set -> placar em string
   const [editando, setEditando] = useState(false);
   const [edits, setEdits] = useState<Record<number, { a: string; b: string }>>({});
 
-  // ----- derivados -----
   const melhorDe = p.melhor_de;
-  const alvo = setsParaVencer(melhorDe);
-  const jogados = p.sets;                  // sets ja salvos, em ordem
-  const numeroAtual = jogados.length + 1;  // set que esta sendo digitado agora
+  const jogados = p.sets;
+  const numeroAtual = jogados.length + 1;
   const fin = p.finalizada;
   const podeSaque = !fin && !editando;
 
-  // saque so precisa ser escolhido no SET 1; depois alterna sozinho
-  const precisaEscolherSaque = podeSaque && numeroAtual === 1 && sacaInicial === undefined;
+  const sacaInicial: 0 | 1 | null =
+    p.saca_inicial === 0 || p.saca_inicial === 1 ? (p.saca_inicial as 0 | 1) : null;
+
+  const precisaEscolherSaque = podeSaque && numeroAtual === 1 && sacaInicial === null;
 
   const aLive = parseInt(placar.a || "0", 10);
   const bLive = parseInt(placar.b || "0", 10);
   const starterAtual =
-    sacaInicial === undefined ? undefined : starterDoSet(sacaInicial, numeroAtual);
+    sacaInicial === null ? null : starterDoSet(sacaInicial, numeroAtual);
   const saca: 0 | 1 | null =
-    podeSaque && starterAtual !== undefined ? quemSaca(aLive, bLive, starterAtual) : null;
+    podeSaque && starterAtual !== null ? quemSaca(aLive, bLive, starterAtual) : null;
 
-  // placar mostrado no cabecalho quando finalizada:
-  //  - bo1: os PONTOS do set unico (ex: 11 : 8)
-  //  - bo3/5: a contagem de SETS (ex: 2 : 1)
+  // vencedor (so quando finalizada): 0 se A venceu, 1 se B
+  const venceu: 0 | 1 | null = !fin
+    ? null
+    : p.sets_a > p.sets_b
+    ? 0
+    : p.sets_b > p.sets_a
+    ? 1
+    : null;
+
   const placarCab =
     melhorDe === 1 && jogados[0]
       ? `${jogados[0].pontos_a} : ${jogados[0].pontos_b}`
@@ -106,18 +84,16 @@ export function PartidaCard({
   const nomeA = nomeDe(p.jogador_a_id);
   const nomeB = nomeDe(p.jogador_b_id);
 
-  // ----- acoes -----
   async function gravarSet(numero: number, a: number, b: number) {
     try {
       await api.registrarSet(p.id, numero, a, b);
-      setPlacar({ a: "", b: "" }); // zera pro proximo set comecar limpo
+      setPlacar({ a: "", b: "" });
       onMudou();
     } catch (e) {
       onErro?.((e as Error).message);
     }
   }
 
-  // +/- ao vivo no set atual: atualiza e, se o set fechou, salva sozinho
   function passo(lado: "a" | "b", valor: string) {
     if (precisaEscolherSaque) {
       onErro?.("Necessário escolher quem começa sacando.");
@@ -130,12 +106,10 @@ export function PartidaCard({
     if (setFinalizado(a, b)) gravarSet(numeroAtual, a, b);
   }
 
-  // digitacao manual: NAO dispara auto-save
   function digitar(lado: "a" | "b", valor: string) {
     setPlacar((prev) => ({ ...prev, [lado]: valor }));
   }
 
-  // botao Salvar do set atual (quando o placar foi digitado em vez de +/-)
   function salvarManual() {
     if (precisaEscolherSaque) {
       onErro?.("Necessário escolher quem começa sacando.");
@@ -154,13 +128,16 @@ export function PartidaCard({
     gravarSet(numeroAtual, a, b);
   }
 
-  // escolhe o sacador do set 1 e limpa o aviso (a condicao do erro deixou de existir)
-  function escolherSaque(lado: 0 | 1) {
-    setSacaInicial(lado);
+  async function escolherSaque(lado: 0 | 1) {
     onLimparErro?.();
+    try {
+      await api.definirSaque(p.id, lado);
+      onMudou();
+    } catch (e) {
+      onErro?.((e as Error).message);
+    }
   }
 
-  // ----- edicao de partida finalizada -----
   function abrirEdicao() {
     const m: Record<number, { a: string; b: string }> = {};
     for (const s of jogados) m[s.numero] = { a: String(s.pontos_a), b: String(s.pontos_b) };
@@ -188,12 +165,12 @@ export function PartidaCard({
     }
   }
 
+  // destaque do nome: vencedor OU sacador em azul (accent). antes o vencedor era verde.
   const estiloNome = (lado: 0 | 1) =>
     ({
-      color: saca === lado ? "var(--accent)" : undefined,
-      fontWeight: saca === lado ? 600 : undefined,
+      color: venceu === lado || saca === lado ? "var(--accent)" : undefined,
+      fontWeight: venceu === lado || saca === lado ? 700 : undefined,
       cursor: podeSaque ? "pointer" : undefined,
-      // dica visual de "toque pra escolher" so enquanto falta escolher o saque do set 1
       textDecoration: precisaEscolherSaque ? "underline dotted" : undefined,
       textDecorationColor: "var(--muted-2)",
       textUnderlineOffset: 4,
@@ -202,7 +179,6 @@ export function PartidaCard({
   const aoTocar = (lado: 0 | 1) => (podeSaque ? () => escolherSaque(lado) : undefined);
   const titulo = podeSaque ? "Tocar pra marcar quem saca primeiro" : undefined;
 
-  // botao lixeira (reusado no bloco de acoes); so aparece se onApagar veio (grupos)
   const botaoApagar = onApagar ? (
     <button
       className="btn ghost"
@@ -217,7 +193,6 @@ export function PartidaCard({
 
   return (
     <div className={`partida ${fin ? "feita" : ""} ${p.fase === "mata" ? "is-mata" : ""}`}>
-      {/* cabecalho: jogadores + (se finalizada) placar agregado */}
       <div className="pc-cab">
         <span className="pc-jogador" onClick={aoTocar(0)} title={titulo}>
           <span className="avatar">{nomeA[0]?.toUpperCase()}</span>
@@ -240,7 +215,6 @@ export function PartidaCard({
         </span>
       </div>
 
-      {/* breakdown dos sets ja jogados (so faz sentido em serie) */}
       {melhorDe > 1 && !editando && jogados.length > 0 && (
         <div className="pc-sets">
           {jogados.map((s) => (
@@ -253,7 +227,6 @@ export function PartidaCard({
         </div>
       )}
 
-      {/* corpo: edicao | (finalizada -> Editar + lixeira) | set atual ao vivo */}
       {editando ? (
         <div className="pc-edicao">
           {jogados.map((s) => {
@@ -298,25 +271,9 @@ export function PartidaCard({
 }
 
 function MarcaSaque() {
-  return (
-    <span
-      title="Saque"
-      aria-label="Saque"
-      style={{
-        width: 9,
-        height: 9,
-        borderRadius: "50%",
-        background: "var(--accent)",
-        display: "inline-block",
-        flexShrink: 0,
-      }}
-    />
-  );
+  return <span className="marca-saque" title="Saca primeiro" aria-label="Saca primeiro" />;
 }
 
-// Stepper de placar: [−] valor [+]. Sem limite superior (>= 0).
-// travado: aparencia de bloqueado, mas os botoes seguem clicaveis de
-// proposito — pra que o clique caia no guard do pai e exiba o aviso.
 function Stepper({
   valor,
   onPasso,

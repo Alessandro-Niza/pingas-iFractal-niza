@@ -1,5 +1,7 @@
 /* ============================================================
-   Tema — dark azulado, inspirado no mockup do torneio.
+   Tema — dark azulado tech. Tipografia mais leve (tracking
+   negativo, mais respiro, cantos suaves) + fundo com glow e
+   ORBITA de traços finos (SVG no App.tsx, componente Orbita).
    Toda a paleta vive aqui em variaveis: trocar cor = 1 lugar.
    ============================================================ */
 
@@ -10,8 +12,8 @@
   --border: #1f2a3d;
   --border-soft: #18222f;
 
-  --accent: #3b82f6;
-  --accent-strong: #2563eb;
+  --accent: #4f8cff;
+  --accent-strong: #3b82f6;
   --accent-soft: rgba(59, 130, 246, 0.12);
 
   --text: #e6ebf2;
@@ -22,22 +24,30 @@
   --loss: #f87171;
   --gold: #facc15;
 
-  --warn: #f59e0b;                       /* faixa de aviso (fallback de modo) */
+  --warn: #f59e0b;
   --warn-text: #fbbf24;
   --warn-soft: rgba(245, 158, 11, 0.1);
 
   /* fundo tech / vidro (inspirado na landing do NizaWorks) */
-  --tech-glow: rgba(59, 130, 246, 0.22);  /* brilho azul do canto */
-  --tech-glow-2: rgba(37, 99, 235, 0.1);  /* brilho secundario */
-  --tech-ring: rgba(96, 165, 250, 0.06);  /* aneis concentricos */
-  --tech-ring-gap: 92px;                  /* espaco entre os aneis */
-  --glass: rgba(15, 21, 33, 0.72);        /* superficie translucida dos cards */
-  --glass-border: rgba(99, 132, 200, 0.16);
+  --tech-glow: rgba(59, 130, 246, 0.18);
+  --tech-glow-2: rgba(37, 99, 235, 0.1);
+  --glass: rgba(13, 18, 28, 0.82);
+  --glass-border: rgba(255,255,255,.06);
 
-  --radius: 14px;
-  --radius-sm: 10px;
+  /* cantos um pouco mais suaves */
+  --radius: 16px;
+  --radius-sm: 12px;
 
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+
+  /* pesos padronizados: mais leves que antes, pra respirar */
+  --w-regular: 400;
+  --w-medium: 500;
+  --w-semibold: 600;
+
+  /* tracking (letter-spacing) reaproveitavel */
+  --track-tight: -0.02em;   /* titulos grandes */
+  --track-snug: -0.01em;    /* titulos medios */
 }
 
 * {
@@ -51,30 +61,47 @@ body,
   height: 100%;
 }
 
+/* fundo: glow azul no canto + profundidade. A ORBITA de traços finos
+   (aneis + pontos) e um SVG no App.tsx (componente Orbita), estilizado
+   pela classe .orbit mais abaixo — nao vive mais aqui como gradiente. */
 body {
-  background-color: #060a11;
-  background-image:
-    /* brilho azul forte no canto superior direito */
-    radial-gradient(55% 45% at 100% 0%, var(--tech-glow), transparent 70%),
-    /* brilho sutil no canto inferior esquerdo */
-    radial-gradient(45% 40% at 0% 100%, var(--tech-glow-2), transparent 70%),
-    /* ondas/aneis concentricos saindo do canto */
-    repeating-radial-gradient(circle at 100% 0%, var(--tech-ring) 0 1px, transparent 1px var(--tech-ring-gap)),
-    /* gradiente de profundidade */
-    linear-gradient(180deg, #0a1322 0%, #060a11 55%);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(45,78,140,.10), transparent 35%),
+    radial-gradient(circle at 90% 15%, rgba(59,130,246,.12), transparent 28%),
+    radial-gradient(circle at 70% 70%, rgba(37,99,235,.06), transparent 35%),
+    linear-gradient(180deg,#0b1018 0%,#090f18 45%,#070b12 100%);
   background-attachment: fixed;
   background-repeat: no-repeat;
   color: var(--text);
   font-family: var(--font);
+  font-weight: var(--w-regular);
+  letter-spacing: var(--track-snug);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* orbita SVG (aneis finos + pontos luminosos), fixa no canto sup. direito.
+   O desenho vive no App.tsx (componente Orbita); aqui so posiciona/dimensiona.
+   fica atras do conteudo (.app tem z-index: 2) e nao captura cliques. */
+.orbit {
+  position: fixed;
+  top: -220px;
+  right: -280px;
+  width: min(1700px, 95vw);
+  height: min(1700px, 95vw);
+  z-index: 0;
+  opacity: .65;
+  pointer-events: none;
 }
 
 /* ----- shell / layout ------------------------------------- */
 
 .app {
+  position: relative;   /* cria o contexto de empilhamento */
+  z-index: 2;           /* conteudo acima da .orbit */
   max-width: 1080px;
   margin: 0 auto;
-  padding: 18px 20px;
+  padding: 20px 22px;
   height: 100vh;
   height: 100dvh;
   display: flex;
@@ -85,18 +112,46 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 14px 18px;
   background: var(--glass);
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 30px -14px rgba(0, 0, 0, 0.7);
 }
 
+/* ícone de Configurações no topo (substituiu a aba) */
+.icone-config {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-left: 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.icone-config:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.icone-config.ativo {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: rgba(59, 130, 246, 0.28);
+}
+.icone-config:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .hamburger {
-  display: none; /* só aparece no mobile */
+  display: none;
   width: 40px;
   height: 40px;
   align-items: center;
@@ -125,9 +180,9 @@ body {
 }
 
 .brand {
-  font-size: 1.2rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 1.24rem;
+  font-weight: var(--w-semibold);
+  letter-spacing: var(--track-tight);
 }
 .brand .accent {
   background: linear-gradient(90deg, #7cc0ff, #3b82f6);
@@ -143,27 +198,27 @@ body {
   align-items: center;
   gap: 7px;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: var(--w-medium);
   font-size: 0.92rem;
 }
 
 .shell {
   display: flex;
-  gap: 14px;
+  gap: 16px;
   flex: 1;
   min-height: 0;
 }
 
 .sidebar {
-  width: 212px;
+  width: 218px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px;
+  padding: 10px;
   background: var(--glass);
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 30px -14px rgba(0, 0, 0, 0.7);
@@ -180,7 +235,8 @@ body {
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-snug);
   cursor: pointer;
   text-align: left;
   transition: background 0.15s, color 0.15s;
@@ -192,6 +248,7 @@ body {
 .navlink.ativo {
   background: var(--accent-soft);
   color: var(--accent);
+  font-weight: var(--w-semibold);
   box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.28);
 }
 .navlink:focus-visible {
@@ -227,10 +284,10 @@ body {
   .sidebar {
     width: 100%;
     position: static;
-    display: none; /* escondido por padrão no mobile */
+    display: none;
   }
   .sidebar.aberto {
-    display: flex; /* gaveta: aparece ao tocar no menu */
+    display: flex;
   }
 }
 
@@ -238,11 +295,11 @@ body {
 
 .card {
   background: var(--glass);
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
-  padding: 18px;
+  padding: 22px;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 34px -16px rgba(0, 0, 0, 0.7);
 }
 
@@ -250,16 +307,18 @@ body {
   margin-top: 16px;
 }
 
+/* titulo de card: Title Case, peso semibold, tracking justo.
+   a barrinha azul continua como assinatura do Design System */
 .card-title {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 0 0 14px;
+  font-size: 0.95rem;
+  font-weight: var(--w-semibold);
+  letter-spacing: var(--track-snug);
+  text-transform: none;
+  color: var(--text);
+  margin: 0 0 16px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 .card-title::before {
   content: "";
@@ -314,7 +373,8 @@ button.btn {
   background: var(--accent);
   color: #fff;
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--w-semibold);
+  letter-spacing: var(--track-snug);
   padding: 10px 16px;
   cursor: pointer;
   transition: background 0.15s, opacity 0.15s;
@@ -353,7 +413,7 @@ button.btn:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 14px;
+  padding: 12px 15px;
   background: var(--surface-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
@@ -366,7 +426,7 @@ button.btn:focus-visible {
   border-radius: 50%;
   background: var(--accent-soft);
   color: var(--accent);
-  font-weight: 700;
+  font-weight: var(--w-semibold);
   font-size: 0.85rem;
   flex-shrink: 0;
 }
@@ -374,7 +434,7 @@ button.btn:focus-visible {
 /* ----- partidas (card multi-set: melhor de N) ------------- */
 
 .partida {
-  padding: 13px 14px;
+  padding: 14px 15px;
   background: var(--surface-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
@@ -383,7 +443,6 @@ button.btn:focus-visible {
   border-color: var(--border);
 }
 
-/* cabecalho: jogador A | placar/melhor-de | jogador B */
 .pc-cab {
   display: flex;
   align-items: center;
@@ -419,11 +478,11 @@ button.btn:focus-visible {
   white-space: nowrap;
 }
 
-/* placar agregado (mostrado quando finalizada) */
 .placar {
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  font-size: 1.05rem;
+  font-weight: var(--w-semibold);
+  font-size: 1.1rem;
+  letter-spacing: var(--track-snug);
   min-width: 52px;
   text-align: center;
 }
@@ -434,7 +493,6 @@ button.btn:focus-visible {
   color: var(--muted);
 }
 
-/* breakdown dos sets ja jogados (chips) */
 .pc-sets {
   display: flex;
   flex-wrap: wrap;
@@ -448,17 +506,16 @@ button.btn:focus-visible {
   background: var(--surface);
   border: 1px solid var(--border-soft);
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 .pc-set-chip .ganhou {
   color: var(--win);
-  font-weight: 700;
+  font-weight: var(--w-semibold);
 }
 .pc-set-chip .perdeu {
   color: var(--muted);
 }
 
-/* set atual ao vivo + bloco de edicao (cada set numa linha) */
 .pc-set-atual,
 .pc-edicao {
   display: flex;
@@ -473,7 +530,6 @@ button.btn:focus-visible {
   letter-spacing: 0.04em;
 }
 
-/* linha de steppers/acoes do set */
 .partida-acoes {
   display: flex;
   align-items: center;
@@ -483,20 +539,16 @@ button.btn:focus-visible {
 .partida .vs {
   color: var(--muted-2);
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: var(--w-semibold);
   letter-spacing: 0.06em;
 }
 
-/* Mata-mata: centraliza os parciais dos sets e o bloco de acoes */
 .partida.is-mata .pc-sets {
   justify-content: center;
 }
 .partida.is-mata .partida-acoes {
   justify-content: center;
 }
-
-/* Fase de grupos: Editar + lixeira lado a lado e centralizados
-   (agora que os dois vivem juntos em .partida-acoes) */
 .partida:not(.is-mata) .partida-acoes {
   justify-content: center;
 }
@@ -510,18 +562,18 @@ button.btn:focus-visible {
 }
 .tabela th {
   text-align: right;
-  font-size: 0.68rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: var(--w-medium);
   padding: 0 8px 12px;
 }
 .tabela th:nth-child(2) {
   text-align: left;
 }
 .tabela td {
-  padding: 12px 8px;
+  padding: 13px 8px;
   text-align: right;
   border-top: 1px solid var(--border-soft);
 }
@@ -536,10 +588,10 @@ button.btn:focus-visible {
   place-items: center;
   width: 24px;
   height: 24px;
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--surface-2);
   color: var(--muted);
-  font-weight: 700;
+  font-weight: var(--w-semibold);
   font-size: 0.8rem;
 }
 .tabela tr.lider .pos {
@@ -548,22 +600,21 @@ button.btn:focus-visible {
 }
 .tabela td.pts {
   color: var(--accent);
-  font-weight: 700;
+  font-weight: var(--w-semibold);
 }
 
-/* ----- aviso / switch / stepper (extraidos dos componentes) -- */
+/* ----- aviso / switch / stepper --------------------------- */
 
 .aviso {
   margin: 12px 0;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 11px 13px;
+  border-radius: 10px;
   background: var(--warn-soft);
   border-left: 3px solid var(--warn);
   color: var(--warn-text);
   font-size: 0.9rem;
-  line-height: 1.45;
+  line-height: 1.5;
 }
-/* variante neutra (ex: aviso de modo na tela Grupos) */
 .aviso.info {
   background: var(--surface-2);
   border-left-color: var(--muted-2);
@@ -608,8 +659,6 @@ button.btn:focus-visible {
   align-items: center;
   gap: 4px;
 }
-/* travado: aparencia de bloqueado SEM matar o clique
-   (os botoes seguem clicaveis de proposito, pra disparar o aviso de saque) */
 .stepper.travado {
   opacity: 0.5;
 }
@@ -626,7 +675,7 @@ button.btn:focus-visible {
   border-radius: var(--radius-sm);
   color: var(--text);
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: var(--w-semibold);
   cursor: pointer;
   transition: border-color 0.15s;
 }
@@ -638,13 +687,13 @@ button.btn:focus-visible {
   outline-offset: 2px;
 }
 
-/* ----- resumo do mata-mata (no topo da Classificacao) ----- */
+/* ----- resumo do mata-mata -------------------------------- */
 
 .resumo-mata .rodada-titulo {
   font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: var(--w-semibold);
+  letter-spacing: 0.02em;
+  text-transform: none;
   color: var(--muted);
   margin: 14px 0 4px;
 }
@@ -653,7 +702,7 @@ button.btn:focus-visible {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 12px;
-  padding: 5px 0;
+  padding: 6px 0;
 }
 .resumo-jogo .nome-a {
   text-align: right;
@@ -667,7 +716,7 @@ button.btn:focus-visible {
 }
 .resumo-jogo span.venc {
   color: var(--text);
-  font-weight: 700;
+  font-weight: var(--w-semibold);
 }
 .resumo-jogo .placar-mini {
   color: var(--muted);
@@ -685,24 +734,24 @@ button.btn:focus-visible {
   padding-bottom: 14px;
   border-bottom: 1px solid var(--border-soft);
   color: var(--gold);
-  font-weight: 600;
+  font-weight: var(--w-semibold);
   font-size: 1.05rem;
 }
 
-/* banner de campeao (topo da Classificacao no pontos corridos e na aba Mata-mata) */
 .banner-campeao {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   margin: 0 0 16px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: rgba(250, 204, 21, 0.1);
-  border: 1px solid rgba(250, 204, 21, 0.35);
+  padding: 13px 15px;
+  border-radius: 10px;
+  background: rgba(6, 96, 30, 0.1);
+  border: 1px solid rgba(21, 29, 250, 0.35);
   color: var(--gold);
-  font-weight: 600;
+  font-weight: var(--w-semibold);
   font-size: 1.05rem;
+  letter-spacing: var(--track-snug);
 }
 
 /* ----- diversos ------------------------------------------- */

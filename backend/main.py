@@ -7,6 +7,7 @@ Modelo de SETS (melhor de N):
   Toda partida e "melhor de N sets" (coluna melhor_de): grupos=1, semis=3, final=5.
   Os PONTOS de cada set vivem na tabela `sets` (FONTE DE VERDADE).
   Em `partidas`, sets_a/sets_b sao CACHE = quantos sets cada lado venceu.
+  saca_inicial (0=A, 1=B, None) persiste quem abre o saque no set 1.
 
 Rodar local:
     uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -53,6 +54,10 @@ class SetOut(BaseModel):
     pontos_a: int
     pontos_b: int
 
+class SaqueIn(BaseModel):
+    # quem saca no set 1: 0 = jogador A, 1 = jogador B
+    saca_inicial: int = Field(ge=0, le=1)
+
 class Partida(BaseModel):
     id: int
     jogador_a_id: int
@@ -64,6 +69,7 @@ class Partida(BaseModel):
     rodada: Optional[int] = None  # rodada do mata-mata (1 = primeira, etc.)
     melhor_de: int = 1            # 1 (grupos), 3 (semis), 5 (final)
     sets: list[SetOut] = []       # sets ja jogados, em ordem
+    saca_inicial: Optional[int] = None  # 0=A, 1=B, None=nao escolhido
 
 class LinhaClassificacao(BaseModel):
     jogador_id: int
@@ -75,7 +81,10 @@ class LinhaClassificacao(BaseModel):
     sets_ganhos: int
     sets_perdidos: int
     saldo_sets: int
-    pontos: int
+    pontos_pro: int        # pontos feitos
+    pontos_contra: int     # pontos sofridos
+    saldo_pontos: int
+    pontos: int            # pontuacao (vitorias * 3)
 
 class ConfigOut(BaseModel):
     modo: str           # o que o organizador escolheu no switch
@@ -227,9 +236,9 @@ def criar_partida(dados: PartidaCriar, conn: sqlite3.Connection = Depends(db_dep
     ).fetchall()
     if len(existentes) != 2:
         raise HTTPException(404, "Um dos jogadores nao existe.")
-    # partida de grupos = sempre set unico (melhor de 1)
+   # partida de grupos = melhor de 3 (vence quem fizer 2 sets)
     cur = conn.execute(
-        "INSERT INTO partidas (jogador_a_id, jogador_b_id, melhor_de) VALUES (?, ?, 1)",
+        "INSERT INTO partidas (jogador_a_id, jogador_b_id, melhor_de) VALUES (?, ?, 3)",
         (dados.jogador_a_id, dados.jogador_b_id),
     )
     conn.commit()
@@ -289,6 +298,23 @@ def registrar_set(
     p = conn.execute("SELECT * FROM partidas WHERE id = ?", (partida_id,)).fetchone()
     return _partida_dict(conn, p)
 
+@app.patch("/partidas/{partida_id}/saque", response_model=Partida)
+def definir_saque(
+    partida_id: int, dados: SaqueIn,
+    conn: sqlite3.Connection = Depends(db_dep),
+):
+    # grava quem abre o saque (set 1). Persistido pra sobreviver a reload da pagina.
+    p = conn.execute("SELECT id FROM partidas WHERE id = ?", (partida_id,)).fetchone()
+    if p is None:
+        raise HTTPException(404, "Partida nao encontrada.")
+    conn.execute(
+        "UPDATE partidas SET saca_inicial = ? WHERE id = ?",
+        (dados.saca_inicial, partida_id),
+    )
+    conn.commit()
+    p = conn.execute("SELECT * FROM partidas WHERE id = ?", (partida_id,)).fetchone()
+    return _partida_dict(conn, p)
+
 @app.delete("/partidas/{partida_id}", status_code=204)
 def deletar_partida(partida_id: int, conn: sqlite3.Connection = Depends(db_dep)):
     p = conn.execute("SELECT id FROM partidas WHERE id = ?", (partida_id,)).fetchone()
@@ -301,7 +327,8 @@ def deletar_partida(partida_id: int, conn: sqlite3.Connection = Depends(db_dep))
 
 def _calcular_classificacao(conn: sqlite3.Connection, modo: str):
     """Deriva a tabela na hora. So conta a FASE DE GRUPOS (mata-mata nao entra).
-    Sets ganhos/perdidos saem da tabela `sets`; pontos somados servem de desempate fino."""
+    Desempate (briefing): Pontos > Saldo Sets > Sets Ganhos > Saldo Pontos >
+    Pontos Feitos > confronto direto (so empate de 2) > ID (final, deterministico)."""
     jogadores = conn.execute("SELECT id, nome, grupo FROM jogadores").fetchall()
     partidas = conn.execute(
         "SELECT * FROM partidas WHERE finalizada = 1 AND fase = 'grupos'"
@@ -313,10 +340,14 @@ def _calcular_classificacao(conn: sqlite3.Connection, modo: str):
             "jogador_id": j["id"], "nome": j["nome"], "grupo": j["grupo"],
             "jogos": 0, "vitorias": 0, "derrotas": 0,
             "sets_ganhos": 0, "sets_perdidos": 0,
-            "_pts_pro": 0, "_pts_contra": 0,   # desempate por pontos (nao vai no response)
+            "pontos_pro": 0, "pontos_contra": 0,
         }
         for j in jogadores
     }
+
+    # guarda o vencedor de cada confronto direto: (id_menor, id_maior) -> id_vencedor
+    # usado so pra desempate de 2 jogadores empatados em tudo.
+    confronto = {}
 
     for p in partidas:
         a, b = p["jogador_a_id"], p["jogador_b_id"]
@@ -325,11 +356,12 @@ def _calcular_classificacao(conn: sqlite3.Connection, modo: str):
             if ga is None or ga != gb:
                 continue  # so confronto dentro do mesmo grupo
         sets = _sets_de(conn, p["id"])
-        sa = sum(1 for s in sets if s["pontos_a"] > s["pontos_b"])   # sets vencidos por A
+        sa = sum(1 for s in sets if s["pontos_a"] > s["pontos_b"])
         sb = sum(1 for s in sets if s["pontos_b"] > s["pontos_a"])
-        pa = sum(s["pontos_a"] for s in sets)                         # pontos somados de A
+        pa = sum(s["pontos_a"] for s in sets)
         pb = sum(s["pontos_b"] for s in sets)
         venceu_a = p["sets_a"] > p["sets_b"]
+        confronto[tuple(sorted((a, b)))] = a if venceu_a else b
         for pid, sg, sp, pp, pc, venceu in [
             (a, sa, sb, pa, pb, venceu_a),
             (b, sb, sa, pb, pa, not venceu_a),
@@ -338,35 +370,46 @@ def _calcular_classificacao(conn: sqlite3.Connection, modo: str):
             t["jogos"] += 1
             t["sets_ganhos"] += sg
             t["sets_perdidos"] += sp
-            t["_pts_pro"] += pp
-            t["_pts_contra"] += pc
+            t["pontos_pro"] += pp
+            t["pontos_contra"] += pc
             t["vitorias" if venceu else "derrotas"] += 1
 
     linhas = []
     for t in tabela.values():
         if modo == "grupos" and t["grupo"] is None:
-            continue  # sem grupo nao entra no ranking de grupos
+            continue
         t["saldo_sets"] = t["sets_ganhos"] - t["sets_perdidos"]
+        t["saldo_pontos"] = t["pontos_pro"] - t["pontos_contra"]
         t["pontos"] = t["vitorias"] * 3
         linhas.append(t)
 
-    # desempate: pontos > saldo de sets > sets ganhos > saldo de PONTOS (fino)
-    def ordenar(x):
-        base = (-x["pontos"], -x["saldo_sets"], -x["sets_ganhos"],
-                -(x["_pts_pro"] - x["_pts_contra"]))
-        return ((x["grupo"] or "~"),) + base if modo == "grupos" else base
+    # 1) criterios ABSOLUTOS (cada jogador tem seu valor). Empate aqui vira 0 no sort.
+    def chave_absoluta(x):
+        return (-x["pontos"], -x["saldo_sets"], -x["sets_ganhos"],
+                -x["saldo_pontos"], -x["pontos_pro"])
 
-    linhas.sort(key=ordenar)
-    for t in linhas:               # higiene: remove campos internos do response
-        t.pop("_pts_pro", None); t.pop("_pts_contra", None)
+    # ordena por grupo, depois pelos absolutos, depois ID (fallback deterministico)
+    linhas.sort(key=lambda x: ((x["grupo"] or "~"),) + chave_absoluta(x) + (x["jogador_id"],))
+
+    # 2) desempate RELACIONAL: percorre pares vizinhos empatados em tudo (mesmo grupo)
+    #    e, se houver confronto direto entre eles, poe o vencedor na frente.
+    #    So atua em empate de 2 (vizinhos); empate de 3+ fica no ID (ja ordenado acima).
+    for i in range(len(linhas) - 1):
+        x, y = linhas[i], linhas[i + 1]
+        if x["grupo"] == y["grupo"] and chave_absoluta(x) == chave_absoluta(y):
+            venc = confronto.get(tuple(sorted((x["jogador_id"], y["jogador_id"]))))
+            if venc == y["jogador_id"]:
+                linhas[i], linhas[i + 1] = y, x  # o vencedor do confronto sobe
+
     return linhas
+
 
 @app.get("/classificacao", response_model=list[LinhaClassificacao])
 def classificacao(conn: sqlite3.Connection = Depends(db_dep)):
     return _calcular_classificacao(conn, get_modo_efetivo(conn))
 
-# ---------------------------------------------------------------- mata-mata
 
+# ---------------------------------------------------------------- mata-mata
 def fase_grupos_completa(conn: sqlite3.Connection) -> bool:
     # todos os jogos da fase de grupos finalizados (e existe ao menos um)
     row = conn.execute(

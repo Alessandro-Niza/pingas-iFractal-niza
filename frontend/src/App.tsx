@@ -1,23 +1,24 @@
 import { useEffect, useState } from "react";
 import { Trophy, Swords, Users, Crown, User, Settings, Menu } from "lucide-react";
 import { api, type Modo } from "./api";
-import { Classificacao } from "./screens/Classificacao";
-import { Partidas } from "./screens/Partidas";
-import { Grupos } from "./screens/Grupos";
-import { MataMata } from "./screens/MataMata";
-import { Jogadores } from "./screens/Jogadores";
-import { Configuracoes } from "./screens/Configuracoes";
+import { Classificacao } from "./pages/Classificacao";
+import { Partidas } from "./pages/Partidas";
+import { Grupos } from "./pages/Grupos";
+import { MataMata } from "./pages/MataMata";
+import { Jogadores } from "./pages/Jogadores";
+import { Configuracoes } from "./pages/Configuracoes";
 
 type Aba = "classificacao" | "partidas" | "grupos" | "mata" | "jogadores" | "config";
 
-// soGrupos = aba so habilitada quando a fase de grupos esta ativada
-const ABAS: { id: Aba; label: string; Icon: typeof Trophy; soGrupos?: boolean }[] = [
-  { id: "classificacao", label: "Classificação", Icon: Trophy },
-  { id: "partidas", label: "Partidas", Icon: Swords },
-  { id: "grupos", label: "Grupos", Icon: Users, soGrupos: true },
-  { id: "mata", label: "Mata-mata", Icon: Crown, soGrupos: true },
-  { id: "jogadores", label: "Jogadores", Icon: User },
-  { id: "config", label: "Configurações", Icon: Settings },
+// ordem das abas de navegação (Configurações NÃO entra aqui: virou engrenagem no topo).
+// testId = id estável p/ automação (Appium), desacoplado do label visível.
+// soGrupos = aba só habilitada quando a fase de grupos está ativa.
+const ABAS: { id: Aba; label: string; testId: string; Icon: typeof Trophy; soGrupos?: boolean }[] = [
+  { id: "classificacao", label: "Classificação", testId: "nav-classificacao", Icon: Trophy },
+  { id: "partidas", label: "Fase de Grupos", testId: "nav-partidas", Icon: Swords },
+  { id: "mata", label: "Mata-mata", testId: "nav-mata", Icon: Crown, soGrupos: true },
+  { id: "grupos", label: "Grupos", testId: "nav-grupos", Icon: Users, soGrupos: true },
+  { id: "jogadores", label: "Jogadores", testId: "nav-jogadores", Icon: User },
 ];
 
 function Logo() {
@@ -35,12 +36,12 @@ export default function App() {
   const [menu, setMenu] = useState(false);
   const [modo, setModo] = useState<Modo>("pontos_corridos");
 
-  // descobre o modo no inicio (pra liberar/travar Grupos e Mata-mata)
+  // descobre o modo no início (pra liberar/travar Grupos e Mata-mata)
   useEffect(() => {
     api.lerConfig().then((cfg) => setModo(cfg.modo)).catch(() => {});
   }, []);
 
-  // se a aba atual depender de grupos e o modo nao for grupos, volta pra Classificação
+  // se a aba atual depende de grupos e o modo não é grupos, volta pra Classificação
   useEffect(() => {
     if (modo !== "grupos" && (aba === "grupos" || aba === "mata")) {
       setAba("classificacao");
@@ -71,9 +72,22 @@ export default function App() {
         <span className="brand">
           Pingas <span className="accent">iFractal</span>
         </span>
+
         <span className="usuario">
           <User size={16} /> Niza
         </span>
+
+        {/* Configurações agora é um ícone no topo (não mais uma aba). */}
+        <button
+          className={`icone-config ${aba === "config" ? "ativo" : ""}`}
+          data-testid="nav-config"
+          aria-label="Configurações"
+          aria-current={aba === "config" ? "page" : undefined}
+          title="Configurações"
+          onClick={() => ir("config")}
+        >
+          <Settings size={20} />
+        </button>
       </header>
 
       <div className="shell">
@@ -84,6 +98,7 @@ export default function App() {
               <button
                 key={item.id}
                 className={`navlink ${aba === item.id ? "ativo" : ""}`}
+                data-testid={item.testId}
                 disabled={!habilitada}
                 title={habilitada ? undefined : "Ative a fase de grupos em Configurações"}
                 aria-current={aba === item.id ? "page" : undefined}

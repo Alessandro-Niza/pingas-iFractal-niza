@@ -177,9 +177,8 @@ function ResumoMata({ mata, nomeDe }: { mata: Partida[]; nomeDe: (id: number) =>
   );
 }
 
-// Tabela de classificacao. As colunas "Sets" e "Saldo" foram removidas:
-// como cada jogo e set unico (melhor de 1), "sets ganhos" so daria 1:0 ou 0:1,
-// que e redundante com V/D. Restam #, Jogador, J, V, D, Pts.
+// Tabela completa (briefing): J, V, D, Sets G/P, Saldo Sets, Pontos Pro/Contra,
+// Saldo Pontos, Pts. Colunas secundarias ganham .hide-sm p/ sumir no mobile.
 function Tabela({ linhas, campeaoId }: { linhas: LinhaClassificacao[]; campeaoId?: number }) {
   return (
     <table className="tabela">
@@ -190,29 +189,35 @@ function Tabela({ linhas, campeaoId }: { linhas: LinhaClassificacao[]; campeaoId
           <th>J</th>
           <th>V</th>
           <th>D</th>
+          <th className="hide-sm">SG</th>
+          <th className="hide-sm">SP</th>
+          <th>SS</th>
+          <th className="hide-sm">PF</th>
+          <th className="hide-sm">PC</th>
+          <th>Sal.P</th>
           <th>Pts</th>
         </tr>
       </thead>
       <tbody>
         {linhas.map((l, i) => (
           <tr key={l.jogador_id} className={i === 0 ? "lider" : ""}>
-            <td>
-              <span className="pos">{i + 1}</span>
-            </td>
+            <td><span className="pos">{i + 1}</span></td>
             <td className="nome-col">
               <span className="avatar">{l.nome[0]?.toUpperCase()}</span>
               {l.nome}
               {campeaoId === l.jogador_id && (
-                <Crown
-                  size={15}
-                  style={{ color: "var(--gold)", marginLeft: 6, verticalAlign: "-2px" }}
-                  aria-label="Campeão"
-                />
+                <Crown size={15} style={{ color: "var(--gold)", marginLeft: 6, verticalAlign: "-2px" }} aria-label="Campeão" />
               )}
             </td>
             <td>{l.jogos}</td>
             <td>{l.vitorias}</td>
             <td>{l.derrotas}</td>
+            <td className="hide-sm">{l.sets_ganhos}</td>
+            <td className="hide-sm">{l.sets_perdidos}</td>
+            <td>{l.saldo_sets > 0 ? "+" : ""}{l.saldo_sets}</td>
+            <td className="hide-sm">{l.pontos_pro}</td>
+            <td className="hide-sm">{l.pontos_contra}</td>
+            <td>{l.saldo_pontos > 0 ? "+" : ""}{l.saldo_pontos}</td>
             <td className="pts">{l.pontos}</td>
           </tr>
         ))}

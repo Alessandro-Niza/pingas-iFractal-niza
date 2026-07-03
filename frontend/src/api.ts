@@ -23,6 +23,7 @@ export interface Partida {
   rodada: number | null;
   melhor_de: number;     // 1 (grupos), 3 (semis), 5 (final)
   sets: SetJogo[];       // sets ja jogados, em ordem
+  saca_inicial: number | null;   // 0=A, 1=B, null=nao escolhido
 }
 
 export interface LinhaClassificacao {
@@ -35,6 +36,9 @@ export interface LinhaClassificacao {
   sets_ganhos: number;
   sets_perdidos: number;
   saldo_sets: number;
+  pontos_pro: number;
+  pontos_contra: number;
+  saldo_pontos: number;
   pontos: number;
 }
 
@@ -82,11 +86,16 @@ export const api = {
       body: JSON.stringify({ jogador_a_id, jogador_b_id }),
     }),
   // registra/edita UM set; o backend recalcula a partida e diz se acabou.
-  // (substituiu o antigo registrarResultado, que mandava "o placar" de uma vez)
   registrarSet: (partidaId: number, numero: number, pontos_a: number, pontos_b: number) =>
     req<Partida>(`/partidas/${partidaId}/sets/${numero}`, {
       method: "PUT",
       body: JSON.stringify({ pontos_a, pontos_b }),
+    }),
+  // grava quem abre o saque (set 1); persiste pra sobreviver a reload
+  definirSaque: (partidaId: number, saca_inicial: 0 | 1) =>
+    req<Partida>(`/partidas/${partidaId}/saque`, {
+      method: "PATCH",
+      body: JSON.stringify({ saca_inicial }),
     }),
   deletarPartida: (id: number) =>
     req<void>(`/partidas/${id}`, { method: "DELETE" }),

@@ -9,6 +9,9 @@ MODELO DE SETS (refator "Uniforme"):
   Os PONTOS de cada set ficam na tabela `sets` (uma linha por set) = FONTE DE VERDADE.
   Em `partidas`, sets_a/sets_b sao CACHE DERIVADO: quantos sets cada lado venceu.
 
+  saca_inicial: quem abre o saque no set 1 (0=A, 1=B, NULL=nao escolhido).
+  Persistido aqui pra sobreviver a reload da pagina (antes vivia so no front).
+
   >>> ATENCAO p/ proxima refatoracao: sets_a/sets_b MUDARAM de significado.
       Antes guardavam os PONTOS do set unico (ex: 11 e 8).
       Agora guardam a CONTAGEM de sets vencidos (ex: 2 e 1).
@@ -35,7 +38,8 @@ CREATE TABLE IF NOT EXISTS partidas (
     finalizada   INTEGER NOT NULL DEFAULT 0,   -- CACHE: 1 quando alguem alcanca os sets necessarios
     fase         TEXT NOT NULL DEFAULT 'grupos',  -- 'grupos' | 'mata' (mata-mata)
     rodada       INTEGER,                          -- nro da rodada do mata-mata (NULL na fase de grupos)
-    melhor_de    INTEGER NOT NULL DEFAULT 1        -- 1, 3 ou 5: maximo de sets da partida
+    melhor_de    INTEGER NOT NULL DEFAULT 1,       -- 1, 3 ou 5: maximo de sets da partida
+    saca_inicial INTEGER                           -- 0=jogador A, 1=jogador B, NULL=nao escolhido
 );
 
 -- Um set individual de uma partida. FONTE DE VERDADE dos pontos.
@@ -94,6 +98,7 @@ def init_db() -> None:
         "ALTER TABLE partidas ADD COLUMN fase TEXT NOT NULL DEFAULT 'grupos'",
         "ALTER TABLE partidas ADD COLUMN rodada INTEGER",
         "ALTER TABLE partidas ADD COLUMN melhor_de INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE partidas ADD COLUMN saca_inicial INTEGER",
     ):
         try:
             conn.execute(ddl)
