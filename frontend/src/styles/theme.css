@@ -543,13 +543,11 @@ button.btn:focus-visible {
   letter-spacing: 0.06em;
 }
 
-.partida.is-mata .pc-sets {
+/* centraliza parciais e acoes em TODOS os cards (grupos e mata-mata) */
+.partida .pc-sets {
   justify-content: center;
 }
-.partida.is-mata .partida-acoes {
-  justify-content: center;
-}
-.partida:not(.is-mata) .partida-acoes {
+.partida .partida-acoes {
   justify-content: center;
 }
 

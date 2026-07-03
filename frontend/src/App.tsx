@@ -8,15 +8,15 @@ import { MataMata } from "./pages/MataMata";
 import { Jogadores } from "./pages/Jogadores";
 import { Configuracoes } from "./pages/Configuracoes";
 
-type Aba = "classificacao" | "partidas" | "grupos" | "mata" | "jogadores" | "config";
+type Aba = "classificacao" | "mata" | "grupos" | "partidas" | "jogadores" | "config";
 
 // ordem das abas de navegação (Configurações NÃO entra aqui: virou engrenagem no topo).
 // testId = id estável p/ automação (Appium), desacoplado do label visível.
 // soGrupos = aba só habilitada quando a fase de grupos está ativa.
 const ABAS: { id: Aba; label: string; testId: string; Icon: typeof Trophy; soGrupos?: boolean }[] = [
   { id: "classificacao", label: "Classificação", testId: "nav-classificacao", Icon: Trophy },
+  { id: "mata", label: "Mata-Mata", testId: "nav-mata", Icon: Crown, soGrupos: true },
   { id: "partidas", label: "Fase de Grupos", testId: "nav-partidas", Icon: Swords },
-  { id: "mata", label: "Mata-mata", testId: "nav-mata", Icon: Crown, soGrupos: true },
   { id: "grupos", label: "Grupos", testId: "nav-grupos", Icon: Users, soGrupos: true },
   { id: "jogadores", label: "Jogadores", testId: "nav-jogadores", Icon: User },
 ];

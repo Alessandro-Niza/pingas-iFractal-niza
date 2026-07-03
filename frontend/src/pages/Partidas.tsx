@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
 import { api, type Jogador, type Partida, type Modo } from "../api";
 import { PartidaCard } from "../components/PartidaCard";
 
@@ -115,20 +114,6 @@ export function Partidas() {
     }
   }
 
-  async function limparTudo() {
-    const ok = window.confirm(
-      `Apagar TODAS as partidas? (jogadores e grupos são mantidos)`
-    );
-    if (!ok) return;
-    setErro("");
-    try {
-      await api.limparPartidas();
-      recarregar();
-    } catch (e) {
-      setErro((e as Error).message);
-    }
-  }
-
   const ehGrupos = modoEf === "grupos";
   const fallbackGrupos = modo === "grupos" && modoEf !== "grupos";
   const podeGerar = ehGrupos || jogadores.length >= 2;
@@ -161,9 +146,12 @@ export function Partidas() {
         </p>
       )}
 
+      {/* "Limpar todas as partidas" saiu daqui: agora vive em Configurações
+          ("Reiniciar torneio"). So o Gerar confrontos, que e o fluxo principal, fica. */}
       <div className="row">
         <button
-          className="btn"
+          className="btn ghost"
+          data-testid="btn-gerar-confrontos"
           onClick={gerarConfrontos}
           disabled={!podeGerar || ocupado}
           title="Cria todos os confrontos que ainda faltam, sem duplicar os existentes"
@@ -176,19 +164,8 @@ export function Partidas() {
             ? "Gerar confrontos dos grupos"
             : "Gerar confrontos (todos contra todos)"}
         </button>
-        {partidasGrupos.length > 0 && (
-          <button
-            className="btn ghost"
-            style={{ color: "var(--loss)", display: "inline-flex", alignItems: "center", gap: 8 }}
-            onClick={limparTudo}
-            disabled={ocupado}
-            title="Apaga TODAS as partidas (mantém jogadores e grupos)"
-          >
-            <Trash2 size={16} />
-            Limpar todas as partidas
-          </button>
-        )}
       </div>
+
       {!podeGerar && (
         <p className="vazio">
           {ehGrupos

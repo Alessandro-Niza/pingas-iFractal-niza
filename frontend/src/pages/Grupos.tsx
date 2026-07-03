@@ -114,7 +114,7 @@ export function Grupos() {
       {erro && <p className="erro">{erro}</p>}
 
       <div className="row">
-        <button className="btn" onClick={sortear} disabled={ocupado || jogadores.length === 0}>
+        <button className="btn ghost" onClick={sortear} disabled={ocupado || jogadores.length === 0}>
           {ocupado ? "Sorteando…" : "Sortear grupos (A–D)"}
         </button>
       </div>

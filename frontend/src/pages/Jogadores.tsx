@@ -73,7 +73,7 @@ export function Jogadores() {
           onChange={(e) => setNome(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && adicionar()}
         />
-        <button className="btn" onClick={adicionar} disabled={!nome.trim()}>
+        <button className="btn ghost" onClick={adicionar} disabled={!nome.trim()}>
           Adicionar
         </button>
       </div>

@@ -71,13 +71,9 @@ export function MataMata() {
 
   const nomeDe = (id: number) => jogadores.find((j) => j.id === id)?.nome ?? "?";
 
+  // so INICIA o mata-mata (quando ainda nao existe). O "Recomeçar" migrou pra
+  // Configurações — por isso aqui nao ha mais confirmacao de refazer.
   async function iniciar() {
-    if (mata.length > 0) {
-      const ok = window.confirm(
-        "Recomeçar o mata-mata? Os jogos atuais do mata-mata são apagados e o chaveamento é refeito com os campeões de cada grupo."
-      );
-      if (!ok) return;
-    }
     setErro("");
     setOcupado(true);
     try {
@@ -141,15 +137,20 @@ export function MataMata() {
             </p>
           )}
 
-          <div className="row">
-            <button className="btn" onClick={iniciar} disabled={!podeIniciar || ocupado}>
-              {ocupado
-                ? "Gerando…"
-                : mata.length === 0
-                ? "Iniciar mata-mata"
-                : "Recomeçar mata-mata"}
-            </button>
-          </div>
+          {/* botao so aparece quando NAO ha mata-mata (pra iniciar). Depois de
+              iniciado, "Recomeçar" vive em Configurações — nao mais aqui. */}
+          {mata.length === 0 && (
+            <div className="row">
+              <button
+                className="btn ghost"
+                data-testid="btn-iniciar-mata"
+                onClick={iniciar}
+                disabled={!podeIniciar || ocupado}
+              >
+                {ocupado ? "Gerando…" : "Iniciar mata-mata"}
+              </button>
+            </div>
+          )}
 
           {erro && <p className="erro">{erro}</p>}
 

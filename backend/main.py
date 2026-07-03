@@ -4,15 +4,17 @@ API do torneio. Dois modos:
   - grupos: confrontos dentro de cada grupo, classificacao por grupo
 
 Modelo de SETS (melhor de N):
-  Toda partida e "melhor de N sets" (coluna melhor_de): grupos=1, semis=3, final=5.
+  Toda partida e "melhor de N sets" (coluna melhor_de): grupos=3, quartas/semis=3, final=5.
   Os PONTOS de cada set vivem na tabela `sets` (FONTE DE VERDADE).
   Em `partidas`, sets_a/sets_b sao CACHE = quantos sets cada lado venceu.
   saca_inicial (0=A, 1=B, None) persiste quem abre o saque no set 1.
 
+Formato grupos+mata (8/12/16 jogadores):
+  4 grupos iguais de 2/3/4 -> avancam 1o E 2o de cada grupo (8 classificados)
+  -> QUARTAS (cruzamento A1xB2, B1xA2, C1xD2, D1xC2) -> semis -> final (bo5).
+
 Rodar local:
     uvicorn main:app --reload --host 0.0.0.0 --port 8000
-Docs interativas:
-    http://localhost:8000/docs
 """
 import sqlite3
 from pathlib import Path
@@ -45,7 +47,6 @@ class PartidaCriar(BaseModel):
     jogador_b_id: int
 
 class SetIn(BaseModel):
-    # pontos de UM set; o backend valida se o set realmente terminou (11 + vantagem 2)
     pontos_a: int = Field(ge=0, le=99)
     pontos_b: int = Field(ge=0, le=99)
 
@@ -55,21 +56,20 @@ class SetOut(BaseModel):
     pontos_b: int
 
 class SaqueIn(BaseModel):
-    # quem saca no set 1: 0 = jogador A, 1 = jogador B
     saca_inicial: int = Field(ge=0, le=1)
 
 class Partida(BaseModel):
     id: int
     jogador_a_id: int
     jogador_b_id: int
-    sets_a: int                 # CACHE: sets vencidos por A (NAO mais pontos)
-    sets_b: int                 # CACHE: sets vencidos por B
+    sets_a: int
+    sets_b: int
     finalizada: bool
-    fase: str = "grupos"          # 'grupos' | 'mata'
-    rodada: Optional[int] = None  # rodada do mata-mata (1 = primeira, etc.)
-    melhor_de: int = 1            # 1 (grupos), 3 (semis), 5 (final)
-    sets: list[SetOut] = []       # sets ja jogados, em ordem
-    saca_inicial: Optional[int] = None  # 0=A, 1=B, None=nao escolhido
+    fase: str = "grupos"
+    rodada: Optional[int] = None
+    melhor_de: int = 1
+    sets: list[SetOut] = []
+    saca_inicial: Optional[int] = None
 
 class LinhaClassificacao(BaseModel):
     jogador_id: int
@@ -81,17 +81,17 @@ class LinhaClassificacao(BaseModel):
     sets_ganhos: int
     sets_perdidos: int
     saldo_sets: int
-    pontos_pro: int        # pontos feitos
-    pontos_contra: int     # pontos sofridos
+    pontos_pro: int
+    pontos_contra: int
     saldo_pontos: int
-    pontos: int            # pontuacao (vitorias * 3)
+    pontos: int
 
 class ConfigOut(BaseModel):
-    modo: str           # o que o organizador escolheu no switch
-    modo_efetivo: str   # o que realmente roda (cai pra pontos_corridos se grupos incompletos)
+    modo: str
+    modo_efetivo: str
 
 class ModoIn(BaseModel):
-    modo: str  # 'pontos_corridos' | 'grupos'
+    modo: str
 
 # ---------------------------------------------------------------- app
 
@@ -113,7 +113,7 @@ def get_modo(conn: sqlite3.Connection) -> str:
 GRUPOS_FIXOS = ("A", "B", "C", "D")
 
 def grupos_completos(conn: sqlite3.Connection) -> bool:
-    # regra de negocio: fase de grupos so vale se TODOS os 4 grupos tem >= 2 jogadores
+    # fase de grupos so vale com 4 grupos IGUAIS de 2, 3 ou 4 (=> 8, 12 ou 16 jogadores).
     cont = {g: 0 for g in GRUPOS_FIXOS}
     rows = conn.execute(
         "SELECT grupo, COUNT(*) AS c FROM jogadores WHERE grupo IS NOT NULL GROUP BY grupo"
@@ -121,10 +121,10 @@ def grupos_completos(conn: sqlite3.Connection) -> bool:
     for r in rows:
         if r["grupo"] in cont:
             cont[r["grupo"]] = r["c"]
-    return all(cont[g] >= 2 for g in GRUPOS_FIXOS)
+    tamanhos = set(cont.values())
+    return len(tamanhos) == 1 and next(iter(tamanhos)) in (2, 3, 4)
 
 def get_modo_efetivo(conn: sqlite3.Connection) -> str:
-    # se escolheu grupos mas eles nao estao completos, o campeonato roda em pontos corridos
     if get_modo(conn) == "grupos" and grupos_completos(conn):
         return "grupos"
     return "pontos_corridos"
@@ -132,16 +132,13 @@ def get_modo_efetivo(conn: sqlite3.Connection) -> str:
 # ---------------------------------------------------------------- helpers de set/partida
 
 def _set_valido(pa: int, pb: int) -> bool:
-    # regra oficial: alguem chega a 11 E abre 2 de vantagem (deuce sem limite)
     return (pa >= 11 or pb >= 11) and abs(pa - pb) >= 2
 
 def _sets_para_vencer(melhor_de: int) -> int:
-    # melhor de 1 -> 1 ; melhor de 3 -> 2 ; melhor de 5 -> 3
     return melhor_de // 2 + 1
 
 def _melhor_de_da_rodada(n_jogos: int) -> int:
-    # 1 jogo na rodada = FINAL = melhor de 5 ; demais (semis/quartas) = melhor de 3.
-    # Espelha rotuloRodada do front, que tambem se baseia na contagem de jogos.
+    # 1 jogo = FINAL = melhor de 5; demais (quartas/semis) = melhor de 3.
     return 5 if n_jogos == 1 else 3
 
 def _sets_de(conn, partida_id: int):
@@ -151,14 +148,11 @@ def _sets_de(conn, partida_id: int):
     ).fetchall()
 
 def _partida_dict(conn, row) -> dict:
-    # monta o dict da partida ja com a lista de sets embutida
     d = dict(row)
     d["sets"] = [dict(s) for s in _sets_de(conn, row["id"])]
     return d
 
 def _recalcular_partida(conn, partida_id: int) -> None:
-    # Deriva sets_a/sets_b/finalizada a partir da tabela `sets`. A verdade sao os sets;
-    # estes campos sao apenas cache recalculado aqui sempre que um set muda.
     p = conn.execute("SELECT melhor_de FROM partidas WHERE id = ?", (partida_id,)).fetchone()
     sets = _sets_de(conn, partida_id)
     ga = sum(1 for s in sets if s["pontos_a"] > s["pontos_b"])
@@ -236,7 +230,7 @@ def criar_partida(dados: PartidaCriar, conn: sqlite3.Connection = Depends(db_dep
     ).fetchall()
     if len(existentes) != 2:
         raise HTTPException(404, "Um dos jogadores nao existe.")
-   # partida de grupos = melhor de 3 (vence quem fizer 2 sets)
+    # partida de grupos = melhor de 3
     cur = conn.execute(
         "INSERT INTO partidas (jogador_a_id, jogador_b_id, melhor_de) VALUES (?, ?, 3)",
         (dados.jogador_a_id, dados.jogador_b_id),
@@ -252,7 +246,6 @@ def listar_partidas(conn: sqlite3.Connection = Depends(db_dep)):
 
 @app.delete("/partidas", status_code=204)
 def limpar_partidas(conn: sqlite3.Connection = Depends(db_dep)):
-    # apaga TODAS as partidas (mantem jogadores e grupos); sets somem por cascade
     conn.execute("DELETE FROM partidas")
     conn.commit()
 
@@ -271,7 +264,6 @@ def registrar_set(
 
     sets = _sets_de(conn, partida_id)
     existentes = len(sets)
-    # so permite: editar set ja jogado (numero <= existentes) OU abrir o PROXIMO (existentes+1)
     if numero > existentes + 1:
         raise HTTPException(400, "Nao da pra pular sets; registre o proximo na ordem.")
     if numero == existentes + 1:
@@ -290,9 +282,6 @@ def registrar_set(
     _recalcular_partida(conn, partida_id)
 
     p = conn.execute("SELECT * FROM partidas WHERE id = ?", (partida_id,)).fetchone()
-    # mata-mata: se ESTA partida fechou, tenta montar a proxima rodada.
-    # OBS p/ proxima refator: editar set de rodada ANTERIOR ja avancada nao
-    # propaga troca de finalista. Nesse caso o certo e "Recomecar mata-mata".
     if p["fase"] == "mata" and p["finalizada"]:
         avancar_mata(conn)
     p = conn.execute("SELECT * FROM partidas WHERE id = ?", (partida_id,)).fetchone()
@@ -303,7 +292,6 @@ def definir_saque(
     partida_id: int, dados: SaqueIn,
     conn: sqlite3.Connection = Depends(db_dep),
 ):
-    # grava quem abre o saque (set 1). Persistido pra sobreviver a reload da pagina.
     p = conn.execute("SELECT id FROM partidas WHERE id = ?", (partida_id,)).fetchone()
     if p is None:
         raise HTTPException(404, "Partida nao encontrada.")
@@ -326,9 +314,9 @@ def deletar_partida(partida_id: int, conn: sqlite3.Connection = Depends(db_dep))
 # ---------------------------------------------------------------- classificacao
 
 def _calcular_classificacao(conn: sqlite3.Connection, modo: str):
-    """Deriva a tabela na hora. So conta a FASE DE GRUPOS (mata-mata nao entra).
-    Desempate (briefing): Pontos > Saldo Sets > Sets Ganhos > Saldo Pontos >
-    Pontos Feitos > confronto direto (so empate de 2) > ID (final, deterministico)."""
+    """Deriva a tabela na hora. So conta a FASE DE GRUPOS.
+    Desempate: Pontos > Saldo Sets > Sets Ganhos > Saldo Pontos > Pontos Feitos
+    > confronto direto (empate de 2) > ID (final, deterministico)."""
     jogadores = conn.execute("SELECT id, nome, grupo FROM jogadores").fetchall()
     partidas = conn.execute(
         "SELECT * FROM partidas WHERE finalizada = 1 AND fase = 'grupos'"
@@ -345,8 +333,6 @@ def _calcular_classificacao(conn: sqlite3.Connection, modo: str):
         for j in jogadores
     }
 
-    # guarda o vencedor de cada confronto direto: (id_menor, id_maior) -> id_vencedor
-    # usado so pra desempate de 2 jogadores empatados em tudo.
     confronto = {}
 
     for p in partidas:
@@ -354,7 +340,7 @@ def _calcular_classificacao(conn: sqlite3.Connection, modo: str):
         if modo == "grupos":
             ga, gb = grupo_de.get(a), grupo_de.get(b)
             if ga is None or ga != gb:
-                continue  # so confronto dentro do mesmo grupo
+                continue
         sets = _sets_de(conn, p["id"])
         sa = sum(1 for s in sets if s["pontos_a"] > s["pontos_b"])
         sb = sum(1 for s in sets if s["pontos_b"] > s["pontos_a"])
@@ -383,57 +369,50 @@ def _calcular_classificacao(conn: sqlite3.Connection, modo: str):
         t["pontos"] = t["vitorias"] * 3
         linhas.append(t)
 
-    # 1) criterios ABSOLUTOS (cada jogador tem seu valor). Empate aqui vira 0 no sort.
     def chave_absoluta(x):
         return (-x["pontos"], -x["saldo_sets"], -x["sets_ganhos"],
                 -x["saldo_pontos"], -x["pontos_pro"])
 
-    # ordena por grupo, depois pelos absolutos, depois ID (fallback deterministico)
     linhas.sort(key=lambda x: ((x["grupo"] or "~"),) + chave_absoluta(x) + (x["jogador_id"],))
 
-    # 2) desempate RELACIONAL: percorre pares vizinhos empatados em tudo (mesmo grupo)
-    #    e, se houver confronto direto entre eles, poe o vencedor na frente.
-    #    So atua em empate de 2 (vizinhos); empate de 3+ fica no ID (ja ordenado acima).
     for i in range(len(linhas) - 1):
         x, y = linhas[i], linhas[i + 1]
         if x["grupo"] == y["grupo"] and chave_absoluta(x) == chave_absoluta(y):
             venc = confronto.get(tuple(sorted((x["jogador_id"], y["jogador_id"]))))
             if venc == y["jogador_id"]:
-                linhas[i], linhas[i + 1] = y, x  # o vencedor do confronto sobe
+                linhas[i], linhas[i + 1] = y, x
 
     return linhas
-
 
 @app.get("/classificacao", response_model=list[LinhaClassificacao])
 def classificacao(conn: sqlite3.Connection = Depends(db_dep)):
     return _calcular_classificacao(conn, get_modo_efetivo(conn))
 
-
 # ---------------------------------------------------------------- mata-mata
+
 def fase_grupos_completa(conn: sqlite3.Connection) -> bool:
-    # todos os jogos da fase de grupos finalizados (e existe ao menos um)
     row = conn.execute(
         "SELECT COUNT(*) AS total, COALESCE(SUM(finalizada),0) AS feitas "
         "FROM partidas WHERE fase = 'grupos'"
     ).fetchone()
     return row["total"] > 0 and row["total"] == row["feitas"]
 
-def campeoes_grupos(conn: sqlite3.Connection) -> dict:
-    # 1o colocado de cada grupo, pela classificacao da fase de grupos
+def classificados_grupos(conn: sqlite3.Connection) -> dict:
+    # 1o E 2o colocado de cada grupo. retorna { "A": [id1o, id2o], ... }
     linhas = _calcular_classificacao(conn, "grupos")
-    campeao = {}
+    por_grupo: dict = {}
     for l in linhas:  # ja vem ordenado por grupo, depois ranking
         g = l["grupo"]
-        if g in GRUPOS_FIXOS and g not in campeao:
-            campeao[g] = l["jogador_id"]
-    return campeao
+        if g in GRUPOS_FIXOS:
+            por_grupo.setdefault(g, []).append(l["jogador_id"])
+    return por_grupo
 
 def _vencedor(p) -> int:
     return p["jogador_a_id"] if p["sets_a"] > p["sets_b"] else p["jogador_b_id"]
 
 def avancar_mata(conn: sqlite3.Connection) -> None:
     # motor generico: se a ultima rodada terminou e tem >1 jogo, cria a proxima
-    # pareando os vencedores em ordem. Funciona pra 4 (semi->final) ou 8 (quartas->semi->final).
+    # pareando vencedores em ordem. Funciona pra quartas->semis->final.
     row = conn.execute("SELECT MAX(rodada) AS r FROM partidas WHERE fase = 'mata'").fetchone()
     if row["r"] is None:
         return
@@ -442,11 +421,11 @@ def avancar_mata(conn: sqlite3.Connection) -> None:
         "SELECT * FROM partidas WHERE fase = 'mata' AND rodada = ? ORDER BY id", (r,)
     ).fetchall()
     if len(jogos) <= 1:
-        return  # rodada unica = final; nao ha proxima
+        return
     if not all(j["finalizada"] for j in jogos):
-        return  # rodada ainda em andamento
+        return
     vencedores = [_vencedor(j) for j in jogos]
-    md = _melhor_de_da_rodada(len(vencedores) // 2)  # ex: 2 vencedores -> 1 jogo (final) -> melhor de 5
+    md = _melhor_de_da_rodada(len(vencedores) // 2)
     for i in range(0, len(vencedores), 2):
         conn.execute(
             "INSERT INTO partidas (jogador_a_id, jogador_b_id, fase, rodada, melhor_de) "
@@ -465,22 +444,29 @@ def listar_mata_mata(conn: sqlite3.Connection = Depends(db_dep)):
 @app.post("/mata-mata/iniciar", response_model=list[Partida])
 def iniciar_mata_mata(conn: sqlite3.Connection = Depends(db_dep)):
     if get_modo_efetivo(conn) != "grupos":
-        raise HTTPException(400, "O mata-mata so existe na fase de grupos (todos os grupos completos).")
+        raise HTTPException(400, "O mata-mata so existe na fase de grupos (8, 12 ou 16 jogadores).")
     if not fase_grupos_completa(conn):
         raise HTTPException(400, "Finalize todos os jogos da fase de grupos antes de iniciar o mata-mata.")
-    campeoes = campeoes_grupos(conn)
-    faltando = [g for g in GRUPOS_FIXOS if g not in campeoes]
+
+    cls = classificados_grupos(conn)
+    # cada grupo precisa ter 1o E 2o pra montar as quartas
+    faltando = [g for g in GRUPOS_FIXOS if len(cls.get(g, [])) < 2]
     if faltando:
-        raise HTTPException(400, f"Sem campeao definido no(s) grupo(s): {', '.join(faltando)}.")
-    # recomeça o mata-mata: limpa o anterior e cria a rodada 1 (A1 x C1, B1 x D1)
+        raise HTTPException(400, f"Grupo(s) sem 1º e 2º definidos: {', '.join(faltando)}.")
+
+    # QUARTAS com cruzamento A1xB2, B1xA2, C1xD2, D1xC2
     conn.execute("DELETE FROM partidas WHERE fase = 'mata'")
-    ordem = [campeoes["A"], campeoes["C"], campeoes["B"], campeoes["D"]]
-    md = _melhor_de_da_rodada(len(ordem) // 2)  # 4 campeoes -> 2 jogos (semis) -> melhor de 3
-    for i in range(0, len(ordem), 2):
+    a1, a2 = cls["A"][0], cls["A"][1]
+    b1, b2 = cls["B"][0], cls["B"][1]
+    c1, c2 = cls["C"][0], cls["C"][1]
+    d1, d2 = cls["D"][0], cls["D"][1]
+    quartas = [(a1, b2), (b1, a2), (c1, d2), (d1, c2)]
+    md = _melhor_de_da_rodada(len(quartas))  # 4 jogos => melhor de 3
+    for ja, jb in quartas:
         conn.execute(
             "INSERT INTO partidas (jogador_a_id, jogador_b_id, fase, rodada, melhor_de) "
             "VALUES (?, ?, 'mata', 1, ?)",
-            (ordem[i], ordem[i + 1], md),
+            (ja, jb, md),
         )
     conn.commit()
     rows = conn.execute(
@@ -500,12 +486,10 @@ def exportar(conn: sqlite3.Connection = Depends(db_dep)):
     """Gera um zip com o campeonato em HTML estatico (100% offline)."""
     modo_ef = get_modo_efetivo(conn)
     jogadores = [dict(j) for j in conn.execute("SELECT id, nome, grupo FROM jogadores").fetchall()]
-    # partidas com sets embutidos (o export usa o detalhe dos sets no placar)
     partidas = [_partida_dict(conn, p) for p in conn.execute("SELECT * FROM partidas ORDER BY id").fetchall()]
     classif = _calcular_classificacao(conn, modo_ef)
     mata = [p for p in partidas if p["fase"] == "mata"]
 
-    # campeao: na fase de grupos sai do mata-mata; em pontos corridos e o lider (se tudo terminou)
     campeao_id = None
     if modo_ef == "grupos":
         if mata:

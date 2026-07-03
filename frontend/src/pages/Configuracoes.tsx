@@ -8,6 +8,7 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [recomecando, setRecomecando] = useState(false);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -74,6 +75,24 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
     }
   }
 
+  // recomeca o mata-mata: apaga o chaveamento atual e remonta a partir dos classificados.
+  // (migrou da aba Mata-mata pra ca — la ficou so o "Iniciar".)
+  async function recomecarMata() {
+    const ok = window.confirm(
+      "Recomeçar o mata-mata?\n\nApaga o chaveamento atual e monta de novo a partir dos classificados da fase de grupos."
+    );
+    if (!ok) return;
+    setErro("");
+    setRecomecando(true);
+    try {
+      await api.iniciarMataMata();
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setRecomecando(false);
+    }
+  }
+
   async function exportar() {
     setErro("");
     setExportando(true);
@@ -101,7 +120,6 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
     <>
       <section className="card">
         <h2 className="card-title">Modo do torneio</h2>
-
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <Switch ligado={ehGrupos} onToggle={alternarModo} />
           <div style={{ display: "flex", flexDirection: "column" }}>
@@ -115,9 +133,7 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
         </div>
 
         {fallback && (
-          <p
-            className="aviso"
-          >
+          <p className="aviso">
             Fase de grupos selecionada, mas o campeonato está rodando em{" "}
             <strong>Pontos Corridos</strong>: todos os grupos devem possuir pelo menos
             2 jogadores para iniciar a fase de grupos.
@@ -133,13 +149,31 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
           arquivar ou compartilhar o resultado.
         </p>
         <button
-          className="btn"
+          className="btn ghost"
+          data-testid="btn-exportar"
           onClick={exportar}
           disabled={exportando}
           style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
         >
           <Download size={16} />
           {exportando ? "Gerando…" : "Exportar campeonato"}
+        </button>
+      </section>
+
+      <section className="card">
+        <h2 className="card-title">Recomeçar mata-mata</h2>
+        <p style={{ color: "var(--muted)", fontSize: "0.9rem", margin: "0 0 14px", lineHeight: 1.5 }}>
+          Apaga o chaveamento atual e monta o mata-mata de novo a partir dos
+          classificados da fase de grupos. Útil se você corrigiu um resultado de
+          grupo depois de já ter iniciado o mata-mata.
+        </p>
+        <button
+          className="btn ghost"
+          data-testid="btn-recomecar-mata"
+          onClick={recomecarMata}
+          disabled={recomecando}
+        >
+          {recomecando ? "Recomeçando…" : "Recomeçar mata-mata"}
         </button>
       </section>
 
@@ -152,6 +186,7 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
         <button
           className="btn ghost"
           style={{ color: "var(--loss)" }}
+          data-testid="btn-reiniciar-torneio"
           onClick={reiniciar}
           disabled={ocupado}
         >
