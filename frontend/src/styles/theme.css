@@ -744,9 +744,9 @@ button.btn:focus-visible {
   margin: 0 0 16px;
   padding: 13px 15px;
   border-radius: 10px;
-  background: rgba(6, 96, 30, 0.1);
-  border: 1px solid rgba(21, 29, 250, 0.35);
-  color: var(--gold);
+  background: rgba(23, 179, 163, 0.1);
+  border: 1px solid rgba(23, 179, 163, 0.35);
+  color: var(--champ);
   font-weight: var(--w-semibold);
   font-size: 1.05rem;
   letter-spacing: var(--track-snug);
@@ -842,11 +842,9 @@ button.btn:focus-visible {
 .fs-sets-valor span:not(.on):not(.fs-x) { color: var(--muted); }
 .fs-x { color: var(--muted-2); font-weight: 400; }
 
-/* EMPILHADO: placar em cima, historico embaixo.
-   grid-template-rows: 1fr auto -> a linha do placar (1fr) cresce e ocupa todo
-   o espaco vertical livre (isso mata o vazio que sobrava embaixo E deixa o
-   placar dominante), enquanto o historico (auto) fica so com a altura que
-   precisa, logo abaixo. */
+/* EMPILHADO: placar (com o marcador espalhado) em cima, historico embaixo.
+   grid-template-rows: 1fr auto -> placar ocupa o espaco vertical livre, o
+   historico (fileira de chips) fica so com a altura que precisa. */
 .fs-corpo {
   display: grid;
   grid-template-columns: 1fr;
@@ -854,14 +852,11 @@ button.btn:focus-visible {
   gap: 18px; flex: 1; min-height: 0;
 }
 
-/* container-type: inline-size faz o .fs-placar virar "regua" pros filhos.
-   Os numeros usam cqi (largura DESTA coluna) em vez de vw (tela toda), entao
-   escalam certinho em qualquer largura. Agora que o placar ocupa a largura
-   inteira, o teto subiu (13rem) pra ele preencher melhor o espaco.
-   min-width: 0 permite encolher; overflow: hidden e rede de seguranca. */
+/* container-type: inline-size -> os numeros escalam pela largura DESTA area
+   (cqi), nao pela tela. min-width: 0 + overflow: hidden como rede de seguranca. */
 .fs-placar {
   border: 1px solid var(--border); border-radius: 16px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
   padding: 24px;
   container-type: inline-size;
   min-width: 0;
@@ -876,42 +871,70 @@ button.btn:focus-visible {
   letter-spacing: 0.12em; margin-bottom: 6px; border: 1px solid rgba(59,130,246,0.3);
   border-radius: 999px; padding: 4px 10px; width: fit-content; margin-inline: auto;
 }
-.fs-pontos { display: flex; align-items: center; justify-content: center; gap: clamp(12px, 6cqi, 48px); max-width: 100%; }
-.fs-ponto-btn {
-  background: none; border: none; cursor: pointer; padding: 0;
-  transition: transform 0.08s;
+
+/* marcador: numero A | × | numero B — espelha o cabecalho (fs-cab).
+   minmax(0,...) trava as colunas pra numero grande nao empurrar o layout. */
+.fs-marcador {
+  width: 100%;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center; gap: clamp(12px, 4vw, 48px);
 }
-.fs-ponto-btn:active { transform: scale(0.94); }
+.fs-centro { display: flex; align-items: center; justify-content: center; }
+
+/* coluna de um jogador: selo + numero + [− +], tudo centralizado na coluna */
+.fs-jogador-placar { display: flex; flex-direction: column; align-items: center; gap: 16px; min-width: 0; }
+
+/* slot do selo com altura reservada: mantem os numeros alinhados entre os dois
+   lados mesmo quando so um tem set/match point. */
+.fs-point-slot { min-height: 34px; display: flex; align-items: center; justify-content: center; }
+.fs-point-badge {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; white-space: nowrap;
+  padding: 5px 13px; border-radius: 999px;
+  color: var(--accent); background: var(--accent-soft); border: 1px solid rgba(59,130,246,0.4);
+}
+/* match point escala o destaque: preenchido, com glow e um pulse discreto */
+.fs-point-badge.match {
+  color: #fff; background: var(--accent); border-color: var(--accent);
+  box-shadow: 0 0 26px -6px var(--accent);
+  animation: fs-pulse 1.4s ease-in-out infinite;
+}
+@keyframes fs-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.72; } }
+
 .fs-num {
   font-size: clamp(3rem, 22cqi, 13rem); font-weight: 800; line-height: 1;
   font-variant-numeric: tabular-nums; color: var(--text);
 }
 .fs-x-grande { font-size: clamp(1.5rem, 8cqi, 3.5rem); color: var(--muted-2); }
 
-.fs-menos { display: flex; align-items: center; gap: clamp(20px, 5vw, 60px); }
-.fs-menos-btn {
-  width: 44px; height: 44px; border-radius: 12px; font-size: 1.4rem;
-  background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); cursor: pointer;
+/* controles: [− +] embaixo do numero. + e a acao primaria (accent); − neutro. */
+.fs-controle-grupo { display: flex; align-items: center; gap: 12px; }
+.fs-ctrl-btn {
+  width: 56px; height: 56px; border-radius: 14px;
+  font-size: 1.9rem; font-weight: 600; line-height: 1;
+  display: grid; place-items: center; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--muted);
+  transition: transform 0.08s, border-color 0.12s, color 0.12s, background 0.12s;
 }
-.fs-menos-btn:hover { border-color: var(--loss); color: var(--loss); }
-.fs-menos-label { color: var(--muted-2); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.fs-ctrl-btn:active { transform: scale(0.94); }
+.fs-ctrl-btn.mais { color: var(--accent); border-color: rgba(59,130,246,0.35); }
+.fs-ctrl-btn.mais:hover { border-color: var(--accent); background: var(--accent-soft); }
+.fs-ctrl-btn.menos:hover { border-color: var(--loss); color: var(--loss); }
 
-/* historico agora vive embaixo do placar: limito a altura pra ele nunca roubar
-   o palco (bo5 = 5 sets), rolando por dentro se precisar. */
-.fs-historico {
-  border: 1px solid var(--border); border-radius: 16px; padding: 18px;
-  overflow-y: auto; max-height: 30vh;
-}
+/* historico: fileira de chips centralizada no rodape (em vez de lista a esquerda) */
+.fs-historico { border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
 .fs-historico-titulo {
   color: var(--muted); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase;
   text-align: center; margin-bottom: 14px;
 }
-.fs-hist-set { padding: 12px 0; border-top: 1px solid var(--border-soft); }
-.fs-hist-set:first-of-type { border-top: none; }
-.fs-hist-set.atual { color: var(--accent); }
+.fs-hist-lista { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+.fs-hist-set {
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 10px 18px; min-width: 120px; text-align: center;
+}
+.fs-hist-set.atual { border-color: var(--accent); background: var(--accent-soft); }
 .fs-hist-num {
-  font-size: 0.78rem; color: var(--muted); letter-spacing: 0.06em;
-  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+  font-size: 0.72rem; color: var(--muted); letter-spacing: 0.06em;
+  display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 6px;
 }
 .fs-hist-set.atual .fs-hist-num { color: var(--accent); }
 .fs-hist-tag {
@@ -919,12 +942,12 @@ button.btn:focus-visible {
   background: var(--accent-soft); color: var(--accent); padding: 2px 7px; border-radius: 999px;
 }
 .fs-hist-placar {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
   font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums;
 }
 .fs-hist-placar .ganhou { color: var(--win); }
 .fs-hist-placar .on { color: var(--accent); }
 .fs-hist-placar .fs-vazio { color: var(--muted-2); font-weight: 400; }
-.fs-check { color: var(--win); margin-left: auto; }
+.fs-check { color: var(--win); }
 
 .fs-erro { color: var(--loss); text-align: center; }

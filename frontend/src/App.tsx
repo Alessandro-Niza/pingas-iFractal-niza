@@ -16,7 +16,7 @@ type Aba = "classificacao" | "mata" | "grupos" | "partidas" | "jogadores" | "con
 const ABAS: { id: Aba; label: string; testId: string; Icon: typeof Trophy; soGrupos?: boolean }[] = [
   { id: "classificacao", label: "Classificação", testId: "nav-classificacao", Icon: Trophy },
   { id: "mata", label: "Mata-Mata", testId: "nav-mata", Icon: Crown, soGrupos: true },
-  { id: "partidas", label: "Fase de Grupos", testId: "nav-partidas", Icon: Swords },
+  { id: "partidas", label: "Partidas", testId: "nav-partidas", Icon: Swords },
   { id: "grupos", label: "Grupos", testId: "nav-grupos", Icon: Users, soGrupos: true },
   { id: "jogadores", label: "Jogadores", testId: "nav-jogadores", Icon: User },
 ];

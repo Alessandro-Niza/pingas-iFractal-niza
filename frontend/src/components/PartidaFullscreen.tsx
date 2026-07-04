@@ -23,6 +23,11 @@ const starterDoSet = (starter: 0 | 1, numero: number): 0 | 1 =>
  *
  * Requisito: a partida ja precisa ter saca_inicial definido (escolhido no card).
  * Quando a PARTIDA fecha (alguem alcanca os sets necessarios), chama onFechar.
+ *
+ * Layout: numeros espalhados nas laterais (cada um sob seu jogador), × no centro.
+ * Os numeros sao APENAS display (passivos). Somar e corrigir acontece pelos
+ * botoes − / + embaixo de cada numero. Acima do numero de quem esta a 1 ponto
+ * de fechar o set acende SET POINT (ou MATCH POINT, se fechar o set fecha o jogo).
  */
 export function PartidaFullscreen({
   partida: p,
@@ -49,6 +54,18 @@ export function PartidaFullscreen({
 
   const nomeA = nomeDe(p.jogador_a_id);
   const nomeB = nomeDe(p.jogador_b_id);
+
+  // ---- SET POINT / MATCH POINT (funcoes puras, reusam setFinalizado) ----
+  // SET POINT: marcar +1 ponto fecharia o set atual. Passar (placar+1) pelo
+  // mesmo setFinalizado cobre de graca o caso do deuce (11-10 nao fecha, 12-10
+  // fecha). MATCH POINT: e set point E vencer ESTE set fecha a partida — ou
+  // seja, o jogador ja tem alvo-1 sets ganhos.
+  const setPointA = setFinalizado(placar.a + 1, placar.b);
+  const setPointB = setFinalizado(placar.b + 1, placar.a);
+  const matchPointA = setPointA && p.sets_a === alvo - 1;
+  const matchPointB = setPointB && p.sets_b === alvo - 1;
+  const seloA = matchPointA ? "MATCH POINT" : setPointA ? "SET POINT" : null;
+  const seloB = matchPointB ? "MATCH POINT" : setPointB ? "SET POINT" : null;
 
   // Esc fecha o modo ao vivo
   useEffect(() => {
@@ -98,6 +115,37 @@ export function PartidaFullscreen({
     </div>
   );
 
+  // coluna do placar de um jogador: selo (set/match point) + numero grande + [− +].
+  // o numero e passivo (display); marcar/corrigir sai pelos botoes.
+  const ColunaJogador = ({
+    lado, nome, valor, selo, isMatch,
+  }: { lado: "a" | "b"; nome: string; valor: number; selo: string | null; isMatch: boolean }) => (
+    <div className="fs-jogador-placar">
+      <div className="fs-point-slot">
+        {selo && (
+          <span className={`fs-point-badge ${isMatch ? "match" : ""}`} data-testid={`fs-point-${lado}`}>
+            {selo}
+          </span>
+        )}
+      </div>
+      <span className="fs-num" data-testid={`fs-num-${lado}`}>{valor}</span>
+      <div className="fs-controle-grupo">
+        <button
+          className="fs-ctrl-btn menos"
+          onClick={() => ponto(lado, -1)}
+          data-testid={`btn-menos-${lado}`}
+          aria-label={`Tirar ponto de ${nome}`}
+        >−</button>
+        <button
+          className="fs-ctrl-btn mais"
+          onClick={() => ponto(lado, +1)}
+          data-testid={`btn-mais-${lado}`}
+          aria-label={`Somar ponto para ${nome}`}
+        >+</button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="fs-overlay" role="dialog" aria-label="Placar ao vivo" data-testid="fullscreen-partida">
       <button className="fs-fechar" onClick={onFechar} aria-label="Fechar modo ao vivo" data-testid="btn-fechar-fullscreen">
@@ -123,48 +171,47 @@ export function PartidaFullscreen({
       <div className="fs-corpo">
         <div className="fs-placar">
           <div className="fs-set-atual">SET {numeroAtual} DE {melhorDe}</div>
-          <div className="fs-pontos">
-            <button className="fs-ponto-btn" onClick={() => ponto("a", +1)} aria-label={`Ponto ${nomeA}`}>
-              <span className="fs-num">{placar.a}</span>
-            </button>
-            <span className="fs-x-grande">×</span>
-            <button className="fs-ponto-btn" onClick={() => ponto("b", +1)} aria-label={`Ponto ${nomeB}`}>
-              <span className="fs-num">{placar.b}</span>
-            </button>
-          </div>
-          <div className="fs-menos">
-            <button className="fs-menos-btn" onClick={() => ponto("a", -1)} aria-label={`Menos ${nomeA}`}>−</button>
-            <span className="fs-menos-label">corrigir</span>
-            <button className="fs-menos-btn" onClick={() => ponto("b", -1)} aria-label={`Menos ${nomeB}`}>−</button>
+
+          {/* marcador espalhado: numero A | × | numero B, espelhando o cabecalho */}
+          <div className="fs-marcador">
+            <ColunaJogador lado="a" nome={nomeA} valor={placar.a} selo={seloA} isMatch={matchPointA} />
+            <div className="fs-centro">
+              <span className="fs-x-grande">×</span>
+            </div>
+            <ColunaJogador lado="b" nome={nomeB} valor={placar.b} selo={seloB} isMatch={matchPointB} />
           </div>
         </div>
 
         <aside className="fs-historico">
           <div className="fs-historico-titulo">HISTÓRICO DE SETS</div>
-          {Array.from({ length: melhorDe }).map((_, i) => {
-            const num = i + 1;
-            const s = jogados[i];
-            const atual = num === numeroAtual;
-            return (
-              <div key={num} className={`fs-hist-set ${atual ? "atual" : ""}`}>
-                <div className="fs-hist-num">SET {num}{atual && <span className="fs-hist-tag">ATUAL</span>}</div>
-                <div className="fs-hist-placar">
-                  {s ? (
-                    <>
-                      <span className={s.pontos_a > s.pontos_b ? "ganhou" : ""}>{s.pontos_a}</span>
-                      <span className="fs-x">×</span>
-                      <span className={s.pontos_b > s.pontos_a ? "ganhou" : ""}>{s.pontos_b}</span>
-                      {s.pontos_a > s.pontos_b || s.pontos_b > s.pontos_a ? <span className="fs-check">✓</span> : null}
-                    </>
-                  ) : atual ? (
-                    <><span className="on">{placar.a}</span><span className="fs-x">×</span><span className="on">{placar.b}</span></>
-                  ) : (
-                    <span className="fs-vazio">— × —</span>
-                  )}
+          <div className="fs-hist-lista">
+            {Array.from({ length: melhorDe }).map((_, i) => {
+              const num = i + 1;
+              const s = jogados[i];
+              const atual = num === numeroAtual;
+              return (
+                <div key={num} className={`fs-hist-set ${atual ? "atual" : ""}`}>
+                  <div className="fs-hist-num">
+                    SET {num}{atual && <span className="fs-hist-tag">ATUAL</span>}
+                  </div>
+                  <div className="fs-hist-placar">
+                    {s ? (
+                      <>
+                        <span className={s.pontos_a > s.pontos_b ? "ganhou" : ""}>{s.pontos_a}</span>
+                        <span className="fs-x">×</span>
+                        <span className={s.pontos_b > s.pontos_a ? "ganhou" : ""}>{s.pontos_b}</span>
+                        {s.pontos_a !== s.pontos_b ? <span className="fs-check">✓</span> : null}
+                      </>
+                    ) : atual ? (
+                      <><span className="on">{placar.a}</span><span className="fs-x">×</span><span className="on">{placar.b}</span></>
+                    ) : (
+                      <span className="fs-vazio">— × —</span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </aside>
       </div>
 

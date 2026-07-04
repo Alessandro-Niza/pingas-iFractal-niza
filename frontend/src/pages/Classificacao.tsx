@@ -106,7 +106,7 @@ export function Classificacao() {
         <h2 className="card-title">Classificação geral</h2>
         <Aviso />
         {campeaoPontos && (
-          <div className="banner-campeao">
+          <div className="banner-campeao" data-testid="banner-campeao-pc">
             <Trophy size={20} />
             <span>
               Campeão: <strong>{campeaoPontos.nome}</strong>
@@ -157,7 +157,7 @@ function ResumoMata({ mata, nomeDe }: { mata: Partida[]; nomeDe: (id: number) =>
   return (
     <>
       {campeaoId !== null && (
-        <div className="banner-campeao">
+        <div className="banner-campeao" data-testid="banner-campeao-mata">
           <Trophy size={18} />
           <span>
             Campeão: <strong>{nomeDe(campeaoId)}</strong>
@@ -206,7 +206,7 @@ function Tabela({ linhas, campeaoId }: { linhas: LinhaClassificacao[]; campeaoId
               <span className="avatar">{l.nome[0]?.toUpperCase()}</span>
               {l.nome}
               {campeaoId === l.jogador_id && (
-                <Crown size={15} style={{ color: "var(--gold)", marginLeft: 6, verticalAlign: "-2px" }} aria-label="Campeão" />
+                <Crown size={15} data-testid="crown-campeao" style={{ color: "var(--gold)", marginLeft: 6, verticalAlign: "-2px" }} aria-label="Campeão" />
               )}
             </td>
             <td>{l.jogos}</td>

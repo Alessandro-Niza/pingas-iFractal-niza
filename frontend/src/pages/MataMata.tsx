@@ -144,8 +144,6 @@ export function MataMata() {
 
   return (
     <section className="card">
-      <h2 className="card-title">Mata-mata</h2>
-
       {!ehGruposSelecionado && (
         <p className="aviso info">
           O mata-mata acontece depois da fase de grupos. Ative a{" "}
@@ -156,7 +154,7 @@ export function MataMata() {
       {ehGruposSelecionado && (
         <>
           {campeaoId !== null && (
-            <div className="banner-campeao">
+            <div className="banner-campeao" data-testid="banner-campeao-mata">
               <Trophy size={20} />
               <span>
                 Campeão: <strong>{nomeDe(campeaoId)}</strong>

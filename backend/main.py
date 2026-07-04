@@ -316,7 +316,11 @@ def deletar_partida(partida_id: int, conn: sqlite3.Connection = Depends(db_dep))
 def _calcular_classificacao(conn: sqlite3.Connection, modo: str):
     """Deriva a tabela na hora. So conta a FASE DE GRUPOS.
     Desempate: Pontos > Saldo Sets > Sets Ganhos > Saldo Pontos > Pontos Feitos
-    > confronto direto (empate de 2) > ID (final, deterministico)."""
+    > confronto direto (empate de 2) > ID (final, deterministico).
+
+    Em 'grupos' a tabela e separada POR grupo. Em 'pontos_corridos' e UNICA
+    (global): o grupo NAO entra na ordenacao, senao a classificacao sai
+    fragmentada por grupo em vez de ordenada por pontos."""
     jogadores = conn.execute("SELECT id, nome, grupo FROM jogadores").fetchall()
     partidas = conn.execute(
         "SELECT * FROM partidas WHERE finalizada = 1 AND fase = 'grupos'"
@@ -373,11 +377,24 @@ def _calcular_classificacao(conn: sqlite3.Connection, modo: str):
         return (-x["pontos"], -x["saldo_sets"], -x["sets_ganhos"],
                 -x["saldo_pontos"], -x["pontos_pro"])
 
-    linhas.sort(key=lambda x: ((x["grupo"] or "~"),) + chave_absoluta(x) + (x["jogador_id"],))
+    # grupos: ordena por grupo, depois ranking, depois id (tabela por grupo).
+    # pontos_corridos: tabela unica global -> o grupo NAO entra na chave,
+    # senao a classificacao sai fragmentada por grupo em vez de por pontos.
+    def chave_ordem(x):
+        base = chave_absoluta(x) + (x["jogador_id"],)
+        if modo == "grupos":
+            return ((x["grupo"] or "~"),) + base
+        return base
 
+    linhas.sort(key=chave_ordem)
+
+    # desempate final por confronto direto (so entre 2 realmente empatados).
+    # grupos: restringe ao mesmo grupo. pontos_corridos: vale global (todos
+    # jogaram contra todos, entao o confronto direto sempre existe).
     for i in range(len(linhas) - 1):
         x, y = linhas[i], linhas[i + 1]
-        if x["grupo"] == y["grupo"] and chave_absoluta(x) == chave_absoluta(y):
+        mesmo_contexto = (x["grupo"] == y["grupo"]) if modo == "grupos" else True
+        if mesmo_contexto and chave_absoluta(x) == chave_absoluta(y):
             venc = confronto.get(tuple(sorted((x["jogador_id"], y["jogador_id"]))))
             if venc == y["jogador_id"]:
                 linhas[i], linhas[i + 1] = y, x

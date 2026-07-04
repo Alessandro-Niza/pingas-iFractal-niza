@@ -16,6 +16,48 @@ function Raquete({ size = 18 }: { size?: number }) {
   );
 }
 
+/**
+ * Ordena os confrontos de um round-robin pelo metodo do circulo, pra a lista
+ * sair INTERCALADA (ninguem empilhado jogando contra todos seguido) em vez da
+ * ordem ingenua do laco aninhado. Isto e SO a ordem de geracao: nao cria
+ * rodadas, nao usa o campo `rodada`, nao toca no backend. Funcao pura e
+ * deterministica — mesma entrada, mesma saida.
+ *
+ * Retorna todos os pares unicos, ja orientados: quem aparece antes na lista
+ * original vira o jogador A (mantem o visual estavel, ex: Arthur sempre à esq).
+ */
+function ordenarConfrontosCirculo(jogadores: Jogador[]): [Jogador, Jogador][] {
+  if (jogadores.length < 2) return [];
+
+  // indice original de cada jogador, pra orientar o par (menor indice = A)
+  const ordem = new Map(jogadores.map((j, i) => [j.id, i]));
+
+  // padding com bye (null) se impar, pra o circulo fechar certinho
+  const roda: (Jogador | null)[] = [...jogadores];
+  if (roda.length % 2 === 1) roda.push(null);
+  const n = roda.length;
+  const metade = n / 2;
+
+  const fixo = roda[0];
+  let giro = roda.slice(1);
+
+  const pares: [Jogador, Jogador][] = [];
+  for (let r = 0; r < n - 1; r++) {
+    const linha = [fixo, ...giro];
+    for (let i = 0; i < metade; i++) {
+      const a = linha[i];
+      const b = linha[n - 1 - i];
+      if (a && b) {
+        // orienta pelo indice original: o que vem antes na lista vira A
+        pares.push(ordem.get(a.id)! <= ordem.get(b.id)! ? [a, b] : [b, a]);
+      }
+    }
+    // rotaciona o "giro" (fixo fica parado): ultimo vai pra frente
+    giro = [giro[giro.length - 1], ...giro.slice(0, -1)];
+  }
+  return pares;
+}
+
 export function Partidas() {
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
   const [partidas, setPartidas] = useState<Partida[]>([]);
@@ -81,14 +123,13 @@ export function Partidas() {
     try {
       const chave = (x: number, y: number) => [x, y].sort((a, b) => a - b).join("-");
       const existe = new Set(partidasGrupos.map((p) => chave(p.jogador_a_id, p.jogador_b_id)));
-      for (let i = 0; i < jogadores.length; i++) {
-        for (let k = i + 1; k < jogadores.length; k++) {
-          const ja = jogadores[i];
-          const jb = jogadores[k];
-          if (modo === "grupos" && (!ja.grupo || ja.grupo !== jb.grupo)) continue;
-          if (!existe.has(chave(ja.id, jb.id))) {
-            await api.criarPartida(ja.id, jb.id);
-          }
+      // ordem intercalada (metodo do circulo) em vez do laco aninhado.
+      // o filtro de grupo e o dedup continuam IDENTICOS — so muda a ordem
+      // em que os pares sao criados.
+      for (const [ja, jb] of ordenarConfrontosCirculo(jogadores)) {
+        if (modo === "grupos" && (!ja.grupo || ja.grupo !== jb.grupo)) continue;
+        if (!existe.has(chave(ja.id, jb.id))) {
+          await api.criarPartida(ja.id, jb.id);
         }
       }
       recarregar();
