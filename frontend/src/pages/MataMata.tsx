@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Trophy } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Trophy, Radio } from "lucide-react";
 import { api, type Jogador, type Partida, type Modo } from "../api";
 import { PartidaCard } from "../components/PartidaCard";
+import { PartidaFullscreen } from "../components/PartidaFullscreen";
 
 // rotulo da rodada pelo numero de jogos (generico: serve pra 4 ou 8 times)
 function rotuloRodada(qtdJogos: number): string {
@@ -20,6 +22,7 @@ export function MataMata() {
   const [modoEf, setModoEf] = useState<Modo>("pontos_corridos");
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
+  const [aoVivoId, setAoVivoId] = useState<number | null>(null); // partida em fullscreen
 
   function recarregar() {
     Promise.all([
@@ -71,6 +74,37 @@ export function MataMata() {
 
   const nomeDe = (id: number) => jogadores.find((j) => j.id === id)?.nome ?? "?";
 
+  // Mesmo padrao do Partidas.tsx: envolve o PartidaCard com o botao "Ao vivo".
+  // podeAoVivo = partida nao finalizada E com saque ja definido (o fullscreen
+  // precisa do saca_inicial). Como so da pra escolher quem saca com os DOIS
+  // jogadores presentes, esse gate ja protege contra abrir o placar de uma
+  // semi/final que ainda esta esperando o vencedor da rodada anterior.
+  const cardDe = (p: Partida) => {
+    const podeAoVivo = !p.finalizada && (p.saca_inicial === 0 || p.saca_inicial === 1);
+    return (
+      <div className="pc-wrapper" key={p.id}>
+        <PartidaCard
+          partida={p}
+          nomeDe={nomeDe}
+          onMudou={recarregar}
+          onErro={setErro}
+          onLimparErro={() => setErro("")}
+        />
+        {podeAoVivo && (
+          <button
+            className="btn ghost btn-ao-vivo"
+            data-testid={`btn-ao-vivo-${p.id}`}
+            onClick={() => setAoVivoId(p.id)}
+            title="Abrir placar em tela cheia pra marcar ponto a ponto"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <Radio size={15} /> Ao vivo
+          </button>
+        )}
+      </div>
+    );
+  };
+
   // so INICIA o mata-mata (quando ainda nao existe). O "Recomeçar" migrou pra
   // Configurações — por isso aqui nao ha mais confirmacao de refazer.
   async function iniciar() {
@@ -103,6 +137,10 @@ export function MataMata() {
         ? final[0].jogador_a_id
         : final[0].jogador_b_id
       : null;
+
+  // partida atualmente aberta em tela cheia (busca no array do mata-mata)
+  const partidaAoVivo =
+    aoVivoId !== null ? mata.find((p) => p.id === aoVivoId) ?? null : null;
 
   return (
     <section className="card">
@@ -163,18 +201,7 @@ export function MataMata() {
                     <div className="card-title" style={{ marginBottom: 8 }}>
                       {rotuloRodada(jogos.length)}
                     </div>
-                    <div className="lista">
-                      {jogos.map((p) => (
-                        <PartidaCard
-                          key={p.id}
-                          partida={p}
-                          nomeDe={nomeDe}
-                          onMudou={recarregar}
-                          onErro={setErro}
-                          onLimparErro={() => setErro("")}
-                        />
-                      ))}
-                    </div>
+                    <div className="lista">{jogos.map(cardDe)}</div>
                   </div>
                 );
               })}
@@ -182,6 +209,22 @@ export function MataMata() {
           )}
         </>
       )}
+
+      {/* Portal pro document.body: tira o overlay de dentro da arvore da pagina
+          pra ele nao ser aprisionado por nenhum containing block (filter/
+          transform/backdrop-filter do tema). Assim o position:fixed ancora no
+          viewport de verdade — altura estavel, cobre a tela toda — em vez de
+          depender da altura da pagina atras. */}
+      {partidaAoVivo &&
+        createPortal(
+          <PartidaFullscreen
+            partida={partidaAoVivo}
+            nomeDe={nomeDe}
+            onMudou={recarregar}
+            onFechar={() => setAoVivoId(null)}
+          />,
+          document.body
+        )}
     </section>
   );
 }

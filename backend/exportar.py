@@ -121,10 +121,39 @@ def _rotulo_rodada(qtd: int) -> str:
 
 # ---------------------------------------------------------------- paginas
 
-def _classificacao_html(modo_ef, classificacao, campeao_id, campeao_nome, agora) -> str:
+def _classificacao_html(modo_ef, classificacao, campeao_id, campeao_nome, mata, agora) -> str:
     partes = []
     if campeao_nome:
         partes.append(_banner_campeao(campeao_nome))
+
+    # resumo do mata-mata (Final, Semis, e Quartas SE houver) — igual ao app.
+    # rotulo vem da contagem de jogos: 1=Final, 2=Semis, 4=Quartas (8/12 nao tem quartas).
+    if mata:
+        rodadas = sorted(set(p["rodada"] for p in mata))
+        nome_de = {}  # precisamos dos nomes; reaproveita da classificacao
+        for l in classificacao:
+            nome_de[l["jogador_id"]] = l["nome"]
+        # fallback: se algum id do mata nao esta na classificacao (raro), usa "?"
+        def nm(pid):
+            return nome_de.get(pid, "?")
+        for r in reversed(rodadas):  # Final primeiro
+            jogos = [p for p in mata if p["rodada"] == r]
+            linhas = []
+            for p in jogos:
+                a_venc = p["finalizada"] and p["sets_a"] > p["sets_b"]
+                b_venc = p["finalizada"] and p["sets_b"] > p["sets_a"]
+                placar = _placar_partida(p)
+                linhas.append(
+                    '<div class="jogo">'
+                    f'<span class="lado a{" venc" if a_venc else ""}">{html.escape(nm(p["jogador_a_id"]))}</span>'
+                    f'<span class="placar-mini">{placar}</span>'
+                    f'<span class="lado b{" venc" if b_venc else ""}">{html.escape(nm(p["jogador_b_id"]))}</span>'
+                    "</div>"
+                )
+            partes.append(
+                f'<section class="card"><div class="card-title">{_rotulo_rodada(len(jogos))}</div>'
+                f'{"".join(linhas)}</section>'
+            )
 
     if not classificacao:
         partes.append('<section class="card"><p class="vazio">Nenhuma partida finalizada ainda.</p></section>')
@@ -141,7 +170,6 @@ def _classificacao_html(modo_ef, classificacao, campeao_id, campeao_nome, agora)
                 f"{_tabela(linhas_g)}</section>"
             )
     else:
-        # pontos corridos: a coroa marca o lider/campeao na propria tabela
         partes.append(
             '<section class="card"><div class="card-title">Classificação geral</div>'
             f"{_tabela(classificacao, campeao_id)}</section>"
@@ -318,7 +346,8 @@ body {
 .tabela td { padding: 12px 8px; text-align: right; border-top: 1px solid var(--border-soft); }
 .tabela td.esq { text-align: left; }
 .tabela td.pts { color: var(--accent); font-weight: 700; }
-.tabela td.placar-cell { font-weight: 700; }
+.tabela td.placar-cell { font-weight: 700; text-align: center; white-space: nowrap; }
+.tabela td.placar-cell .sets-detalhe { text-align: center; }
 .sets-detalhe { font-weight: 400; font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
 .pos {
   display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 7px;
@@ -404,7 +433,7 @@ def gerar_zip_export(modo_ef, jogadores, partidas, classificacao, mata, campeao_
 
     arquivos = {
         "style.css": _css(),
-        "Classificacao.html": _classificacao_html(modo_ef, classificacao, campeao_id, campeao_nome, agora),
+        "Classificacao.html": _classificacao_html(modo_ef, classificacao, campeao_id, campeao_nome, mata, agora),
         "Partidas.html": _partidas_html(partidas, jogadores, agora),
         "MataMata.html": _matamata_html(mata, jogadores, campeao_nome, agora),
     }

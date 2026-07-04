@@ -777,3 +777,154 @@ button.btn:focus-visible {
     transition: none !important;
   }
 }
+
+/* ===== modo AO VIVO (fullscreen) — placar de ginasio ===== */
+
+.pc-wrapper { position: relative; }
+.btn-ao-vivo { margin-top: 6px; font-size: 0.82rem; }
+
+.fs-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: radial-gradient(60% 50% at 50% 0%, #0d1626, #060a11 80%);
+  display: flex; flex-direction: column; gap: 18px;
+  padding: 28px clamp(16px, 4vw, 56px);
+  overflow-y: auto;
+}
+.fs-fechar {
+  position: absolute; top: 18px; right: 18px;
+  width: 46px; height: 46px; display: grid; place-items: center;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 12px; color: var(--muted); cursor: pointer;
+}
+.fs-fechar:hover { color: var(--text); border-color: var(--accent); }
+
+.fs-topo { text-align: center; }
+.fs-melhor-de {
+  color: var(--muted); font-size: 0.8rem; letter-spacing: 0.12em;
+  text-transform: uppercase; margin-bottom: 12px;
+}
+.fs-cab {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  gap: clamp(12px, 3vw, 40px);
+}
+.fs-lado {
+  border: 1px solid var(--border); border-radius: 16px;
+  padding: 18px 22px; min-height: 120px;
+  display: flex; flex-direction: column; justify-content: center; gap: 10px;
+  min-width: 0; /* deixa o card do jogador encolher em vez de estourar o grid */
+}
+.fs-lado.sacando { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 30px -8px var(--accent); }
+.fs-saque-badge {
+  display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;
+  color: var(--accent); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em;
+  background: var(--accent-soft); border: 1px solid rgba(59,130,246,0.3);
+  padding: 5px 12px; border-radius: 999px;
+}
+.fs-jogador { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.fs-avatar {
+  width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--surface-2); color: var(--muted); font-size: 1.5rem; font-weight: 700;
+  flex-shrink: 0; /* avatar nao encolhe; quem quebra e o nome */
+}
+.fs-avatar.on { background: var(--accent); color: #fff; }
+.fs-nome {
+  font-size: clamp(1.4rem, 3vw, 2.2rem); font-weight: 700;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.fs-sets { text-align: center; }
+.fs-sets-label { color: var(--muted); font-size: 0.8rem; letter-spacing: 0.12em; }
+.fs-sets-valor {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  font-size: clamp(2.4rem, 6vw, 4rem); font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.fs-sets-valor .on { color: var(--accent); }
+.fs-sets-valor span:not(.on):not(.fs-x) { color: var(--muted); }
+.fs-x { color: var(--muted-2); font-weight: 400; }
+
+/* EMPILHADO: placar em cima, historico embaixo.
+   grid-template-rows: 1fr auto -> a linha do placar (1fr) cresce e ocupa todo
+   o espaco vertical livre (isso mata o vazio que sobrava embaixo E deixa o
+   placar dominante), enquanto o historico (auto) fica so com a altura que
+   precisa, logo abaixo. */
+.fs-corpo {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr auto;
+  gap: 18px; flex: 1; min-height: 0;
+}
+
+/* container-type: inline-size faz o .fs-placar virar "regua" pros filhos.
+   Os numeros usam cqi (largura DESTA coluna) em vez de vw (tela toda), entao
+   escalam certinho em qualquer largura. Agora que o placar ocupa a largura
+   inteira, o teto subiu (13rem) pra ele preencher melhor o espaco.
+   min-width: 0 permite encolher; overflow: hidden e rede de seguranca. */
+.fs-placar {
+  border: 1px solid var(--border); border-radius: 16px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+  padding: 24px;
+  container-type: inline-size;
+  min-width: 0;
+  overflow: hidden;
+}
+.fs-set-atual {
+  color: var(--text); font-size: clamp(1.1rem, 2.5vw, 1.6rem); font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.fs-set-atual::before {
+  content: "SET ATUAL"; display: block; color: var(--accent); font-size: 0.72rem;
+  letter-spacing: 0.12em; margin-bottom: 6px; border: 1px solid rgba(59,130,246,0.3);
+  border-radius: 999px; padding: 4px 10px; width: fit-content; margin-inline: auto;
+}
+.fs-pontos { display: flex; align-items: center; justify-content: center; gap: clamp(12px, 6cqi, 48px); max-width: 100%; }
+.fs-ponto-btn {
+  background: none; border: none; cursor: pointer; padding: 0;
+  transition: transform 0.08s;
+}
+.fs-ponto-btn:active { transform: scale(0.94); }
+.fs-num {
+  font-size: clamp(3rem, 22cqi, 13rem); font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums; color: var(--text);
+}
+.fs-x-grande { font-size: clamp(1.5rem, 8cqi, 3.5rem); color: var(--muted-2); }
+
+.fs-menos { display: flex; align-items: center; gap: clamp(20px, 5vw, 60px); }
+.fs-menos-btn {
+  width: 44px; height: 44px; border-radius: 12px; font-size: 1.4rem;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); cursor: pointer;
+}
+.fs-menos-btn:hover { border-color: var(--loss); color: var(--loss); }
+.fs-menos-label { color: var(--muted-2); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; }
+
+/* historico agora vive embaixo do placar: limito a altura pra ele nunca roubar
+   o palco (bo5 = 5 sets), rolando por dentro se precisar. */
+.fs-historico {
+  border: 1px solid var(--border); border-radius: 16px; padding: 18px;
+  overflow-y: auto; max-height: 30vh;
+}
+.fs-historico-titulo {
+  color: var(--muted); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase;
+  text-align: center; margin-bottom: 14px;
+}
+.fs-hist-set { padding: 12px 0; border-top: 1px solid var(--border-soft); }
+.fs-hist-set:first-of-type { border-top: none; }
+.fs-hist-set.atual { color: var(--accent); }
+.fs-hist-num {
+  font-size: 0.78rem; color: var(--muted); letter-spacing: 0.06em;
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.fs-hist-set.atual .fs-hist-num { color: var(--accent); }
+.fs-hist-tag {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 0.62rem;
+  background: var(--accent-soft); color: var(--accent); padding: 2px 7px; border-radius: 999px;
+}
+.fs-hist-placar {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.fs-hist-placar .ganhou { color: var(--win); }
+.fs-hist-placar .on { color: var(--accent); }
+.fs-hist-placar .fs-vazio { color: var(--muted-2); font-weight: 400; }
+.fs-check { color: var(--win); margin-left: auto; }
+
+.fs-erro { color: var(--loss); text-align: center; }

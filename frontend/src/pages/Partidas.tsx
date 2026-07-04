@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { Radio } from "lucide-react";
 import { api, type Jogador, type Partida, type Modo } from "../api";
 import { PartidaCard } from "../components/PartidaCard";
+import { PartidaFullscreen } from "../components/PartidaFullscreen";
 
 const GRUPOS = ["A", "B", "C", "D"];
 
-// raquete (mesmo desenho do logo) — usada no botao Gerar
 function Raquete({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -21,6 +23,7 @@ export function Partidas() {
   const [modoEf, setModoEf] = useState<Modo>("pontos_corridos");
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
+  const [aoVivoId, setAoVivoId] = useState<number | null>(null); // partida em fullscreen
 
   function recarregar() {
     Promise.all([api.listarJogadores(), api.listarPartidas(), api.lerConfig()])
@@ -70,7 +73,6 @@ export function Partidas() {
     return ga && ga === gb ? ga : null;
   };
 
-  // esta tela cuida SO da fase de grupos; mata-mata tem aba propria
   const partidasGrupos = partidas.filter((p) => p.fase === "grupos");
 
   async function gerarConfrontos() {
@@ -97,9 +99,6 @@ export function Partidas() {
     }
   }
 
-  // apagar partida individual: so faz sentido no pontos corridos.
-  // na fase de grupos, remover um confronto isolado deixa o grupo incompleto
-  // (o "todos contra todos" quebra), por isso a lixeira nem aparece la (ver cardDe).
   async function apagar(p: Partida) {
     const ok = window.confirm(
       `Apagar a partida ${nomeDe(p.jogador_a_id)} x ${nomeDe(p.jogador_b_id)}?`
@@ -118,19 +117,36 @@ export function Partidas() {
   const fallbackGrupos = modo === "grupos" && modoEf !== "grupos";
   const podeGerar = ehGrupos || jogadores.length >= 2;
 
-  // lixeira individual so no pontos corridos: em grupos, onApagar vai undefined
-  // e o PartidaCard esconde a lixeira sozinho (Editar fica centralizado).
-  const cardDe = (p: Partida) => (
-    <PartidaCard
-      key={p.id}
-      partida={p}
-      nomeDe={nomeDe}
-      onMudou={recarregar}
-      onErro={setErro}
-      onLimparErro={() => setErro("")}
-      onApagar={ehGrupos ? undefined : apagar}
-    />
-  );
+  // envolve o card com o botao "Ao vivo" quando a partida da pra jogar ao vivo:
+  // nao finalizada E com saque ja definido (o fullscreen precisa do saca_inicial).
+  const cardDe = (p: Partida) => {
+    const podeAoVivo = !p.finalizada && (p.saca_inicial === 0 || p.saca_inicial === 1);
+    return (
+      <div className="pc-wrapper" key={p.id}>
+        <PartidaCard
+          partida={p}
+          nomeDe={nomeDe}
+          onMudou={recarregar}
+          onErro={setErro}
+          onLimparErro={() => setErro("")}
+          onApagar={ehGrupos ? undefined : apagar}
+        />
+        {podeAoVivo && (
+          <button
+            className="btn ghost btn-ao-vivo"
+            data-testid={`btn-ao-vivo-${p.id}`}
+            onClick={() => setAoVivoId(p.id)}
+            title="Abrir placar em tela cheia pra marcar ponto a ponto"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <Radio size={15} /> Ao vivo
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const partidaAoVivo = aoVivoId !== null ? partidas.find((p) => p.id === aoVivoId) ?? null : null;
 
   return (
     <section className="card">
@@ -146,8 +162,6 @@ export function Partidas() {
         </p>
       )}
 
-      {/* "Limpar todas as partidas" saiu daqui: agora vive em Configurações
-          ("Reiniciar torneio"). So o Gerar confrontos, que e o fluxo principal, fica. */}
       <div className="row">
         <button
           className="btn ghost"
@@ -206,6 +220,23 @@ export function Partidas() {
           )}
         </div>
       )}
+
+      {/* Portal pro document.body: mesmo motivo do MataMata — tira o overlay da
+          arvore da pagina pra o position:fixed ancorar no viewport e nao ser
+          preso por um containing block do tema (filter/transform). Aqui na
+          fase de grupos ja "funcionava" porque a pagina costuma ser alta, mas
+          isso era fragil (quebraria com poucos jogadores). Com o portal fica
+          deterministico. */}
+      {partidaAoVivo &&
+        createPortal(
+          <PartidaFullscreen
+            partida={partidaAoVivo}
+            nomeDe={nomeDe}
+            onMudou={recarregar}
+            onFechar={() => setAoVivoId(null)}
+          />,
+          document.body
+        )}
     </section>
   );
 }

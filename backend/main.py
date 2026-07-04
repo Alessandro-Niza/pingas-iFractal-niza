@@ -398,12 +398,20 @@ def fase_grupos_completa(conn: sqlite3.Connection) -> bool:
     return row["total"] > 0 and row["total"] == row["feitas"]
 
 def classificados_grupos(conn: sqlite3.Connection) -> dict:
-    # 1o E 2o colocado de cada grupo. retorna { "A": [id1o, id2o], ... }
+    # quantos avancam depende do TAMANHO do grupo:
+    #   grupos de 2 ou 3 -> so o 1o (=> 4 classificados => semis)
+    #   grupos de 4      -> 1o e 2o  (=> 8 classificados => quartas)
+    # tamanho e uniforme (validado em grupos_completos), entao basta olhar um grupo.
+    tam = conn.execute(
+        "SELECT COUNT(*) AS c FROM jogadores WHERE grupo = 'A'"
+    ).fetchone()["c"]
+    vagas = 2 if tam == 4 else 1
+
     linhas = _calcular_classificacao(conn, "grupos")
     por_grupo: dict = {}
     for l in linhas:  # ja vem ordenado por grupo, depois ranking
         g = l["grupo"]
-        if g in GRUPOS_FIXOS:
+        if g in GRUPOS_FIXOS and len(por_grupo.get(g, [])) < vagas:
             por_grupo.setdefault(g, []).append(l["jogador_id"])
     return por_grupo
 
@@ -449,20 +457,32 @@ def iniciar_mata_mata(conn: sqlite3.Connection = Depends(db_dep)):
         raise HTTPException(400, "Finalize todos os jogos da fase de grupos antes de iniciar o mata-mata.")
 
     cls = classificados_grupos(conn)
-    # cada grupo precisa ter 1o E 2o pra montar as quartas
-    faltando = [g for g in GRUPOS_FIXOS if len(cls.get(g, [])) < 2]
+    faltando = [g for g in GRUPOS_FIXOS if not cls.get(g)]
     if faltando:
-        raise HTTPException(400, f"Grupo(s) sem 1º e 2º definidos: {', '.join(faltando)}.")
+        raise HTTPException(400, f"Grupo(s) sem classificado definido: {', '.join(faltando)}.")
 
-    # QUARTAS com cruzamento A1xB2, B1xA2, C1xD2, D1xC2
+    total = sum(len(v) for v in cls.values())
     conn.execute("DELETE FROM partidas WHERE fase = 'mata'")
-    a1, a2 = cls["A"][0], cls["A"][1]
-    b1, b2 = cls["B"][0], cls["B"][1]
-    c1, c2 = cls["C"][0], cls["C"][1]
-    d1, d2 = cls["D"][0], cls["D"][1]
-    quartas = [(a1, b2), (b1, a2), (c1, d2), (d1, c2)]
-    md = _melhor_de_da_rodada(len(quartas))  # 4 jogos => melhor de 3
-    for ja, jb in quartas:
+
+    if total == 8:
+        # 16 jogadores: grupos de 4 classificam 1o e 2o -> QUARTAS
+        # cruzamento A1xB2, B1xA2, C1xD2, D1xC2
+        a1, a2 = cls["A"][0], cls["A"][1]
+        b1, b2 = cls["B"][0], cls["B"][1]
+        c1, c2 = cls["C"][0], cls["C"][1]
+        d1, d2 = cls["D"][0], cls["D"][1]
+        confrontos = [(a1, b2), (b1, a2), (c1, d2), (d1, c2)]
+    else:
+        # 8 ou 12 jogadores: grupos de 2/3 classificam so o 1o -> SEMIS diretas
+        # cruzamento A1xC1, B1xD1
+        a1 = cls["A"][0]
+        b1 = cls["B"][0]
+        c1 = cls["C"][0]
+        d1 = cls["D"][0]
+        confrontos = [(a1, c1), (b1, d1)]
+
+    md = _melhor_de_da_rodada(len(confrontos))  # 4 jogos=>bo3 (quartas); 2 jogos=>bo3 (semis)
+    for ja, jb in confrontos:
         conn.execute(
             "INSERT INTO partidas (jogador_a_id, jogador_b_id, fase, rodada, melhor_de) "
             "VALUES (?, ?, 'mata', 1, ?)",
