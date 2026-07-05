@@ -181,6 +181,7 @@ function ResumoMata({ mata, nomeDe }: { mata: Partida[]; nomeDe: (id: number) =>
 // Saldo Pontos, Pts. Colunas secundarias ganham .hide-sm p/ sumir no mobile.
 function Tabela({ linhas, campeaoId }: { linhas: LinhaClassificacao[]; campeaoId?: number }) {
   return (
+    <div className="tabela-wrap">
     <table className="tabela">
       <thead>
         <tr>
@@ -188,13 +189,13 @@ function Tabela({ linhas, campeaoId }: { linhas: LinhaClassificacao[]; campeaoId
           <th>Jogador</th>
           <th>J</th>
           <th>V</th>
-          <th>D</th>
+          <th className="hide-xs">D</th>
           <th className="hide-sm">SG</th>
           <th className="hide-sm">SP</th>
-          <th>SS</th>
+          <th className="hide-xs">SS</th>
           <th className="hide-sm">PF</th>
           <th className="hide-sm">PC</th>
-          <th>Sal.P</th>
+          <th className="hide-xs">Sal.P</th>
           <th>Pts</th>
         </tr>
       </thead>
@@ -211,17 +212,18 @@ function Tabela({ linhas, campeaoId }: { linhas: LinhaClassificacao[]; campeaoId
             </td>
             <td>{l.jogos}</td>
             <td>{l.vitorias}</td>
-            <td>{l.derrotas}</td>
+            <td className="hide-xs">{l.derrotas}</td>
             <td className="hide-sm">{l.sets_ganhos}</td>
             <td className="hide-sm">{l.sets_perdidos}</td>
-            <td>{l.saldo_sets > 0 ? "+" : ""}{l.saldo_sets}</td>
+            <td className="hide-xs">{l.saldo_sets > 0 ? "+" : ""}{l.saldo_sets}</td>
             <td className="hide-sm">{l.pontos_pro}</td>
             <td className="hide-sm">{l.pontos_contra}</td>
-            <td>{l.saldo_pontos > 0 ? "+" : ""}{l.saldo_pontos}</td>
+            <td className="hide-xs">{l.saldo_pontos > 0 ? "+" : ""}{l.saldo_pontos}</td>
             <td className="pts">{l.pontos}</td>
           </tr>
         ))}
       </tbody>
     </table>
+    </div>
   );
 }

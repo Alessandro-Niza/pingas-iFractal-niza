@@ -29,6 +29,10 @@ const btnSmall = { padding: "6px 12px", fontSize: "0.85rem" } as const;
  * Saque persistido no backend (p.saca_inicial): sobrevive a reload.
  * Destaque de vencedor: nome + parciais ganhos em AZUL (var(--accent)).
  * A taca (🏆) NAO aparece mais por partida — fica so no banner do campeao do torneio.
+ *
+ * Layout mobile: o cabecalho empilha os jogadores, cada um com o SEU placar a
+ * direita (.pc-placar-lado, que so aparece no mobile via CSS). No desktop, o
+ * placar combinado ".pc-cab-meio" (2 : 0) continua no meio, como antes.
  */
 export function PartidaCard({
   partida: p,
@@ -80,6 +84,12 @@ export function PartidaCard({
     melhorDe === 1 && jogados[0]
       ? `${jogados[0].pontos_a} : ${jogados[0].pontos_b}`
       : `${p.sets_a} : ${p.sets_b}`;
+
+  // placar POR JOGADOR (layout mobile empilhado): sets vencidos, ou os pontos
+  // do set unico quando melhor_de === 1 (legado). Alinha com o placarCab acima.
+  const usaPontos = melhorDe === 1 && !!jogados[0];
+  const scoreA = usaPontos ? jogados[0].pontos_a : p.sets_a;
+  const scoreB = usaPontos ? jogados[0].pontos_b : p.sets_b;
 
   const nomeA = nomeDe(p.jogador_a_id);
   const nomeB = nomeDe(p.jogador_b_id);
@@ -198,6 +208,7 @@ export function PartidaCard({
           <span className="avatar">{nomeA[0]?.toUpperCase()}</span>
           <span className="nome" style={estiloNome(0)}>{nomeA}</span>
           {saca === 0 && <MarcaSaque />}
+          <span className="pc-placar-lado" data-testid={`placar-a-${p.id}`}>{scoreA}</span>
         </span>
 
         <span className="pc-cab-meio">
@@ -212,6 +223,7 @@ export function PartidaCard({
           {saca === 1 && <MarcaSaque />}
           <span className="nome" style={estiloNome(1)}>{nomeB}</span>
           <span className="avatar">{nomeB[0]?.toUpperCase()}</span>
+          <span className="pc-placar-lado" data-testid={`placar-b-${p.id}`}>{scoreB}</span>
         </span>
       </div>
 

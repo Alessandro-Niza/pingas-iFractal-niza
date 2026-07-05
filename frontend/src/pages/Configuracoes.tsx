@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
-import { api, type Modo } from "../api";
+import { api, type Modo, type MelhorDe } from "../api";
 
 export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => void }) {
   const [modo, setModo] = useState<Modo>("pontos_corridos");
@@ -9,6 +9,11 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
   const [ocupado, setOcupado] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [recomecando, setRecomecando] = useState(false);
+
+  // melhor_de por fase (config no backend). Comecam com os defaults do backend.
+  const [mdGrupos, setMdGrupos] = useState<number>(3);
+  const [mdMata, setMdMata] = useState<number>(3);
+  const [mdFinal, setMdFinal] = useState<number>(5);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -19,6 +24,9 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
         const cfg = await api.lerConfig(ac.signal);
         setModo(cfg.modo);
         setModoEf(cfg.modo_efetivo);
+        setMdGrupos(cfg.melhor_de_grupos);
+        setMdMata(cfg.melhor_de_mata);
+        setMdFinal(cfg.melhor_de_final);
         setErro("");
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
@@ -32,6 +40,30 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
     carregar();
     return () => ac.abort();
   }, []);
+
+  // sincroniza os 3 selects com o que o backend confirmou (fonte da verdade)
+  function aplicarConfig(cfg: { melhor_de_grupos: number; melhor_de_mata: number; melhor_de_final: number }) {
+    setMdGrupos(cfg.melhor_de_grupos);
+    setMdMata(cfg.melhor_de_mata);
+    setMdFinal(cfg.melhor_de_final);
+  }
+
+  async function salvarMelhorDe(
+    chave: "melhor_de_grupos" | "melhor_de_mata" | "melhor_de_final",
+    valor: MelhorDe,
+    setLocal: (v: number) => void
+  ) {
+    setErro("");
+    setLocal(valor); // otimista, pra o select responder na hora
+    try {
+      const cfg = await api.definirConfig({ [chave]: valor });
+      aplicarConfig(cfg);
+    } catch (e) {
+      setErro((e as Error).message);
+      // reverte lendo do backend
+      api.lerConfig().then(aplicarConfig).catch(() => {});
+    }
+  }
 
   // alterna o modo, com confirmacao e oferta de limpar partidas antigas
   async function alternarModo() {
@@ -142,6 +174,36 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
       </section>
 
       <section className="card">
+        <h2 className="card-title">Formato das partidas (melhor de)</h2>
+        <p style={{ color: "var(--muted)", fontSize: "0.9rem", margin: "0 0 14px", lineHeight: 1.5 }}>
+          Quantos sets cada partida disputa, por fase. A mudança vale para as partidas
+          <strong> geradas a partir de agora</strong> — as que já existem mantêm o formato
+          com que foram criadas. Para reaplicar num torneio já montado, regenere os
+          confrontos (ou recomece o mata-mata).
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <MelhorDeRow
+            label="Grupos e pontos corridos"
+            testId="cfg-melhor-de-grupos"
+            valor={mdGrupos}
+            onChange={(v) => salvarMelhorDe("melhor_de_grupos", v, setMdGrupos)}
+          />
+          <MelhorDeRow
+            label="Mata-mata (quartas e semis)"
+            testId="cfg-melhor-de-mata"
+            valor={mdMata}
+            onChange={(v) => salvarMelhorDe("melhor_de_mata", v, setMdMata)}
+          />
+          <MelhorDeRow
+            label="Final"
+            testId="cfg-melhor-de-final"
+            valor={mdFinal}
+            onChange={(v) => salvarMelhorDe("melhor_de_final", v, setMdFinal)}
+          />
+        </div>
+      </section>
+
+      <section className="card">
         <h2 className="card-title">Exportar campeonato</h2>
         <p style={{ color: "var(--muted)", fontSize: "0.9rem", margin: "0 0 14px", lineHeight: 1.5 }}>
           Baixa o campeonato como um pacote de páginas HTML (Classificação, Partidas e
@@ -196,6 +258,34 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
 
       {erro && <p className="erro">{erro}</p>}
     </>
+  );
+}
+
+function MelhorDeRow({
+  label,
+  testId,
+  valor,
+  onChange,
+}: {
+  label: string;
+  testId: string;
+  valor: number;
+  onChange: (v: MelhorDe) => void;
+}) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <span>{label}</span>
+      <select
+        data-testid={testId}
+        value={valor}
+        onChange={(e) => onChange(Number(e.target.value) as MelhorDe)}
+        style={{ minWidth: 150 }}
+      >
+        <option value={3}>Melhor de 3</option>
+        <option value={5}>Melhor de 5</option>
+        <option value={7}>Melhor de 7</option>
+      </select>
+    </label>
   );
 }
 

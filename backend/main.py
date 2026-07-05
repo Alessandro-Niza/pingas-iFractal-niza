@@ -89,9 +89,15 @@ class LinhaClassificacao(BaseModel):
 class ConfigOut(BaseModel):
     modo: str
     modo_efetivo: str
+    melhor_de_grupos: int
+    melhor_de_mata: int
+    melhor_de_final: int
 
-class ModoIn(BaseModel):
-    modo: str
+class ConfigIn(BaseModel):
+    modo: Optional[str] = None
+    melhor_de_grupos: Optional[int] = None
+    melhor_de_mata: Optional[int] = None
+    melhor_de_final: Optional[int] = None
 
 # ---------------------------------------------------------------- app
 
@@ -137,9 +143,25 @@ def _set_valido(pa: int, pb: int) -> bool:
 def _sets_para_vencer(melhor_de: int) -> int:
     return melhor_de // 2 + 1
 
-def _melhor_de_da_rodada(n_jogos: int) -> int:
-    # 1 jogo = FINAL = melhor de 5; demais (quartas/semis) = melhor de 3.
-    return 5 if n_jogos == 1 else 3
+# melhor_de configuravel por fase (guardado na tabela config). Os defaults
+# reproduzem o comportamento antigo: grupos bo3, mata bo3, final bo5.
+_MELHOR_DE_PADRAO = {"melhor_de_grupos": 3, "melhor_de_mata": 3, "melhor_de_final": 5}
+_MELHOR_DE_VALIDOS = (3, 5, 7)
+
+def _get_melhor_de(conn, chave: str) -> int:
+    row = conn.execute("SELECT valor FROM config WHERE chave = ?", (chave,)).fetchone()
+    if row is None:
+        return _MELHOR_DE_PADRAO[chave]
+    try:
+        v = int(row["valor"])
+    except (ValueError, TypeError):
+        return _MELHOR_DE_PADRAO[chave]
+    return v if v in _MELHOR_DE_VALIDOS else _MELHOR_DE_PADRAO[chave]
+
+def _melhor_de_da_rodada(conn, n_jogos: int) -> int:
+    # 1 jogo = FINAL; demais (quartas/semis) = mata. Le da config por fase.
+    chave = "melhor_de_final" if n_jogos == 1 else "melhor_de_mata"
+    return _get_melhor_de(conn, chave)
 
 def _sets_de(conn, partida_id: int):
     return conn.execute(
@@ -167,21 +189,43 @@ def _recalcular_partida(conn, partida_id: int) -> None:
 
 # ---------------------------------------------------------------- config
 
+def _set_config(conn, chave: str, valor: str) -> None:
+    conn.execute(
+        "INSERT INTO config (chave, valor) VALUES (?, ?) "
+        "ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor",
+        (chave, valor),
+    )
+
+def _config_out(conn) -> dict:
+    return {
+        "modo": get_modo(conn),
+        "modo_efetivo": get_modo_efetivo(conn),
+        "melhor_de_grupos": _get_melhor_de(conn, "melhor_de_grupos"),
+        "melhor_de_mata": _get_melhor_de(conn, "melhor_de_mata"),
+        "melhor_de_final": _get_melhor_de(conn, "melhor_de_final"),
+    }
+
 @app.get("/config", response_model=ConfigOut)
 def ler_config(conn: sqlite3.Connection = Depends(db_dep)):
-    return {"modo": get_modo(conn), "modo_efetivo": get_modo_efetivo(conn)}
+    return _config_out(conn)
 
 @app.put("/config", response_model=ConfigOut)
-def definir_modo(dados: ModoIn, conn: sqlite3.Connection = Depends(db_dep)):
-    if dados.modo not in ("pontos_corridos", "grupos"):
-        raise HTTPException(400, "Modo invalido.")
-    conn.execute(
-        "INSERT INTO config (chave, valor) VALUES ('modo', ?) "
-        "ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor",
-        (dados.modo,),
-    )
+def definir_config(dados: ConfigIn, conn: sqlite3.Connection = Depends(db_dep)):
+    if dados.modo is not None:
+        if dados.modo not in ("pontos_corridos", "grupos"):
+            raise HTTPException(400, "Modo invalido.")
+        _set_config(conn, "modo", dados.modo)
+    for chave, val in (
+        ("melhor_de_grupos", dados.melhor_de_grupos),
+        ("melhor_de_mata", dados.melhor_de_mata),
+        ("melhor_de_final", dados.melhor_de_final),
+    ):
+        if val is not None:
+            if val not in _MELHOR_DE_VALIDOS:
+                raise HTTPException(400, f"melhor_de invalido: {val} (use 3, 5 ou 7).")
+            _set_config(conn, chave, str(val))
     conn.commit()
-    return {"modo": dados.modo, "modo_efetivo": get_modo_efetivo(conn)}
+    return _config_out(conn)
 
 # ---------------------------------------------------------------- jogadores
 
@@ -230,10 +274,11 @@ def criar_partida(dados: PartidaCriar, conn: sqlite3.Connection = Depends(db_dep
     ).fetchall()
     if len(existentes) != 2:
         raise HTTPException(404, "Um dos jogadores nao existe.")
-    # partida de grupos = melhor de 3
+    # partida de grupos: melhor_de vem da config (melhor_de_grupos)
+    md = _get_melhor_de(conn, "melhor_de_grupos")
     cur = conn.execute(
-        "INSERT INTO partidas (jogador_a_id, jogador_b_id, melhor_de) VALUES (?, ?, 3)",
-        (dados.jogador_a_id, dados.jogador_b_id),
+        "INSERT INTO partidas (jogador_a_id, jogador_b_id, melhor_de) VALUES (?, ?, ?)",
+        (dados.jogador_a_id, dados.jogador_b_id, md),
     )
     conn.commit()
     row = conn.execute("SELECT * FROM partidas WHERE id = ?", (cur.lastrowid,)).fetchone()
@@ -450,7 +495,7 @@ def avancar_mata(conn: sqlite3.Connection) -> None:
     if not all(j["finalizada"] for j in jogos):
         return
     vencedores = [_vencedor(j) for j in jogos]
-    md = _melhor_de_da_rodada(len(vencedores) // 2)
+    md = _melhor_de_da_rodada(conn, len(vencedores) // 2)
     for i in range(0, len(vencedores), 2):
         conn.execute(
             "INSERT INTO partidas (jogador_a_id, jogador_b_id, fase, rodada, melhor_de) "
@@ -498,7 +543,7 @@ def iniciar_mata_mata(conn: sqlite3.Connection = Depends(db_dep)):
         d1 = cls["D"][0]
         confrontos = [(a1, c1), (b1, d1)]
 
-    md = _melhor_de_da_rodada(len(confrontos))  # 4 jogos=>bo3 (quartas); 2 jogos=>bo3 (semis)
+    md = _melhor_de_da_rodada(conn, len(confrontos))  # nao-final => melhor_de_mata
     for ja, jb in confrontos:
         conn.execute(
             "INSERT INTO partidas (jogador_a_id, jogador_b_id, fase, rodada, melhor_de) "

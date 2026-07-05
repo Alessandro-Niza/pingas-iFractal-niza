@@ -21,7 +21,7 @@ export interface Partida {
   finalizada: boolean;
   fase: "grupos" | "mata";
   rodada: number | null;
-  melhor_de: number;     // 1 (grupos), 3 (semis), 5 (final)
+  melhor_de: number;     // gravado por partida no momento em que ela e criada
   sets: SetJogo[];       // sets ja jogados, em ordem
   saca_inicial: number | null;   // 0=A, 1=B, null=nao escolhido
 }
@@ -44,6 +44,17 @@ export interface LinhaClassificacao {
 
 export type Modo = "pontos_corridos" | "grupos";
 
+// melhor_de configuravel por fase (opcoes oferecidas na UI)
+export type MelhorDe = 3 | 5 | 7;
+
+export interface Config {
+  modo: Modo;
+  modo_efetivo: Modo;
+  melhor_de_grupos: number;
+  melhor_de_mata: number;
+  melhor_de_final: number;
+}
+
 const API_BASE = import.meta.env.DEV ? `http://${location.hostname}:8000` : "";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -60,13 +71,22 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  lerConfig: (signal?: AbortSignal) =>
-    req<{ modo: Modo; modo_efetivo: Modo }>("/config", { signal }),
+  lerConfig: (signal?: AbortSignal) => req<Config>("/config", { signal }),
+
+  // atualiza modo (mantido por compat com quem ja chama definirModo)
   definirModo: (modo: Modo) =>
-    req<{ modo: Modo; modo_efetivo: Modo }>("/config", {
-      method: "PUT",
-      body: JSON.stringify({ modo }),
-    }),
+    req<Config>("/config", { method: "PUT", body: JSON.stringify({ modo }) }),
+
+  // atualiza UMA ou mais chaves da config: modo e/ou melhor_de por fase.
+  // o backend so mexe no que vier preenchido (patch parcial).
+  definirConfig: (
+    patch: Partial<{
+      modo: Modo;
+      melhor_de_grupos: MelhorDe;
+      melhor_de_mata: MelhorDe;
+      melhor_de_final: MelhorDe;
+    }>
+  ) => req<Config>("/config", { method: "PUT", body: JSON.stringify(patch) }),
 
   listarJogadores: (signal?: AbortSignal) => req<Jogador[]>("/jogadores", { signal }),
   criarJogador: (nome: string) =>

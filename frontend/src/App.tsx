@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Trophy, Swords, Users, Crown, User, Settings, Menu } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Trophy, Swords, Users, Crown, User, Settings, Menu, Radio } from "lucide-react";
 import { api, type Modo } from "./api";
 import { Classificacao } from "./pages/Classificacao";
 import { Partidas } from "./pages/Partidas";
@@ -7,6 +8,9 @@ import { Grupos } from "./pages/Grupos";
 import { MataMata } from "./pages/MataMata";
 import { Jogadores } from "./pages/Jogadores";
 import { Configuracoes } from "./pages/Configuracoes";
+import { AoVivoProvider, useAoVivo } from "./AoVivoProvider";
+import { PartidaFullscreen } from "./components/PartidaFullscreen";
+import { SeletorAoVivo } from "./SeletorAoVivo";
 
 type Aba = "classificacao" | "mata" | "grupos" | "partidas" | "jogadores" | "config";
 
@@ -31,10 +35,34 @@ function Logo() {
   );
 }
 
-export default function App() {
+// Botao "Ao vivo" do topbar: acende quando ha >= 1 partida em andamento e abre
+// o seletor. Fica desabilitado quando nao ha nenhuma (o "habilitado quando uma
+// partida se inicia" que a gente combinou).
+function BotaoAoVivoTopo({ onAbrirSeletor }: { onAbrirSeletor: () => void }) {
+  const { disponiveis } = useAoVivo();
+  // some quando nao ha nenhuma partida pra marcar (igual o botao do card, que
+  // so aparece quando da pra jogar). Mesmo visual do card: .btn.ghost + Radio.
+  if (disponiveis.length === 0) return null;
+  return (
+    <button
+      className="btn ghost btn-ao-vivo-topo"
+      data-testid="btn-ao-vivo-topo"
+      onClick={onAbrirSeletor}
+      title="Abrir placar ao vivo"
+      aria-label="Partidas ao vivo"
+    >
+      <Radio size={15} /> Ao vivo
+    </button>
+  );
+}
+
+function AppInner() {
   const [aba, setAba] = useState<Aba>("classificacao");
   const [menu, setMenu] = useState(false);
   const [modo, setModo] = useState<Modo>("pontos_corridos");
+  const [seletorAberto, setSeletorAberto] = useState(false);
+
+  const { partidaAoVivo, recarregar } = useAoVivo();
 
   // descobre o modo no início (pra liberar/travar Grupos e Mata-mata)
   useEffect(() => {
@@ -53,6 +81,11 @@ export default function App() {
   const ir = (id: Aba) => {
     setAba(id);
     setMenu(false);
+  };
+
+  const abrirSeletor = () => {
+    recarregar();          // garante a lista de "em andamento" fresca ao abrir
+    setSeletorAberto(true);
   };
 
   return (
@@ -76,6 +109,9 @@ export default function App() {
         <span className="usuario">
           <User size={16} /> Niza
         </span>
+
+        {/* botao ao vivo: perto do usuario, retoma partida em andamento */}
+        <BotaoAoVivoTopo onAbrirSeletor={abrirSeletor} />
 
         {/* Configurações agora é um ícone no topo (não mais uma aba). */}
         <button
@@ -121,6 +157,20 @@ export default function App() {
           {aba === "config" && <Configuracoes key="cfg" onModoChange={setModo} />}
         </main>
       </div>
+
+      {/* Modo ao vivo e seletor: renderizados UMA vez aqui no App (nao mais nas
+          paginas), via portal pro body — assim abrem de qualquer aba. */}
+      {seletorAberto && <SeletorAoVivo onFechar={() => setSeletorAberto(false)} />}
+      {partidaAoVivo &&
+        createPortal(<PartidaFullscreen key={partidaAoVivo.id} />, document.body)}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AoVivoProvider>
+      <AppInner />
+    </AoVivoProvider>
   );
 }

@@ -20,9 +20,9 @@
   --muted: #8893a7;
   --muted-2: #5c6678;
 
-  --win: #34d399;
+  --win:  #3b82f6;
   --loss: #f87171;
-  --gold: #facc15;
+  --gold:  #3b82f6;
 
   --warn: #f59e0b;
   --warn-text: #fbbf24;
@@ -744,9 +744,9 @@ button.btn:focus-visible {
   margin: 0 0 16px;
   padding: 13px 15px;
   border-radius: 10px;
-  background: rgba(23, 179, 163, 0.1);
-  border: 1px solid rgba(23, 179, 163, 0.35);
-  color: var(--champ);
+  background: var(--accent-soft);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: var(--accent);
   font-weight: var(--w-semibold);
   font-size: 1.05rem;
   letter-spacing: var(--track-snug);
@@ -951,3 +951,158 @@ button.btn:focus-visible {
 .fs-check { color: var(--win); }
 
 .fs-erro { color: var(--loss); text-align: center; }
+
+/* ============================================================
+   AJUSTES MOBILE — anexar no MESMO stylesheet global (aquele
+   com :root, .card, .fs-overlay, etc — o que ja e importado).
+   Nada aqui sobrescreve estilo existente fora dos @media.
+   ============================================================ */
+
+/* ---- 1. PLACAR AO VIVO (fullscreen) mais compacto no mobile ---- */
+@media (max-width: 600px) {
+  .fs-overlay { padding: 16px 12px; gap: 12px; }
+
+  .fs-cab { gap: 8px; }
+  .fs-lado { min-height: 0; padding: 10px 12px; gap: 6px; }
+  .fs-avatar { width: 40px; height: 40px; font-size: 1.1rem; }
+  .fs-saque-badge { font-size: 0.6rem; padding: 3px 8px; }
+  .fs-nome { font-size: clamp(0.9rem, 4.5vw, 1.3rem); }
+  .fs-sets-label { font-size: 0.7rem; }
+  .fs-sets-valor { font-size: clamp(1.6rem, 8vw, 2.4rem); gap: 8px; }
+
+  /* solta o grid pra altura NATURAL (nao mais 1fr) e deixa a overlay rolar:
+     isso acaba com o corte dos botoes − + na borda de baixo do placar. */
+  .fs-corpo { grid-template-rows: auto auto; flex: initial; gap: 10px; }
+  .fs-placar { padding: 16px 12px; gap: 14px; overflow: visible; }
+  .fs-set-atual { font-size: clamp(0.95rem, 4vw, 1.2rem); }
+  .fs-num { font-size: clamp(2.6rem, 26cqi, 6rem); }
+  .fs-x-grande { font-size: clamp(1.2rem, 9cqi, 2.2rem); }
+  .fs-marcador { gap: clamp(6px, 3vw, 16px); }
+  .fs-jogador-placar { gap: 10px; }
+  .fs-point-slot { min-height: 24px; }
+  .fs-point-badge { font-size: 0.6rem; padding: 3px 8px; }
+  .fs-ctrl-btn { width: 46px; height: 46px; font-size: 1.6rem; }
+  .fs-controle-grupo { gap: 8px; }
+
+  .fs-historico { padding: 12px; }
+  .fs-hist-lista { gap: 8px; }
+  .fs-hist-set { min-width: 92px; padding: 8px 12px; }
+}
+
+/* ---- 2. CARDS DE PARTIDA no mobile: jogadores empilhados, cada um com o SEU
+   placar a direita (estilo app esportivo). Nome longo cresce/quebra sem
+   empurrar o placar. Vale pra Partidas e Mata-Mata (mesmo componente). ----
+   SUBSTITUI o bloco antigo "CARDS DE PARTIDA no mobile" do Theme.css. */
+
+/* o placar por jogador so existe no mobile (base = escondido) */
+.pc-placar-lado { display: none; }
+
+@media (max-width: 600px) {
+  .pc-cab { flex-direction: column; align-items: stretch; gap: 8px; }
+
+  .pc-jogador,
+  .pc-jogador.b {
+    flex: initial;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    justify-content: flex-start;
+  }
+
+  /* nome cresce/quebra em vez de truncar ("Guga\nMexicano") */
+  .pc-jogador .nome {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    line-height: 1.15;
+  }
+
+  /* o jogador B tem avatar DEPOIS do nome no DOM; no mobile puxo avatar+nome
+     pra frente com order, pra ficar simetrico com o A (avatar sempre 1o). */
+  .pc-jogador.b .avatar { order: -2; }
+  .pc-jogador.b .nome { order: -1; }
+
+  /* placar de cada jogador: encostado a direita da linha */
+  .pc-placar-lado {
+    display: inline-block;
+    margin-left: auto;
+    padding-left: 12px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: var(--text);
+  }
+
+  /* some o placar combinado do meio (agora e por jogador) */
+  .pc-cab-meio { display: none; }
+}
+
+/* ---- 3. CLASSIFICACAO mais compacta / sem estourar a largura ---- */
+/* rede de seguranca: se a tabela nao couber, rola DENTRO do card (scroll
+   horizontal) em vez de vazar a pagina e cortar o badge de posicao. */
+.tabela-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 560px) {
+  .card { padding: 16px 14px; }
+  .tabela th, .tabela td { padding-left: 5px; padding-right: 5px; }
+  .tabela td { padding-top: 10px; padding-bottom: 10px; }
+  .tabela td.nome-col { gap: 7px; }
+}
+/* telas bem estreitas: esconde as colunas de desempate (D, SS, Sal.P),
+   deixando # / Jogador / J / V / Pts — o essencial cabe. */
+@media (max-width: 460px) {
+  .tabela .hide-xs { display: none; }
+}
+/* ===== botao "Ao vivo" no topbar + seletor de partidas ao vivo ===== */
+
+/* mesmo visual do botao do card (.btn.ghost); aqui so ajusta o espacamento
+   pro topo. Sem cor/pulse proprios — herda o ghost, identico ao card. */
+.btn-ao-vivo-topo {
+  margin-left: 8px;
+  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+@media (max-width: 760px) {
+  .btn-ao-vivo-topo { padding-left: 10px; padding-right: 10px; }
+}
+
+/* seletor (modal) das partidas ao vivo */
+.seletor-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(6, 10, 17, .72);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.seletor-card {
+  width: min(520px, 100%);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+  box-shadow: 0 20px 60px -20px rgba(0, 0, 0, .8);
+}
+.seletor-titulo {
+  font-size: 0.95rem; font-weight: var(--w-semibold); letter-spacing: var(--track-snug);
+  color: var(--text); margin-bottom: 4px;
+}
+.seletor-lista { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
+.seletor-item {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border-soft);
+  color: var(--text); font: inherit; cursor: pointer;
+  transition: border-color .15s;
+}
+.seletor-item:hover { border-color: var(--accent); }
+.seletor-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.si-nome { font-weight: var(--w-medium); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.si-nome.a { text-align: right; }
+.si-nome.b { text-align: left; }
+.si-placar { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.si-sets { font-variant-numeric: tabular-nums; font-weight: var(--w-semibold); }
+.si-atual { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+.seletor-vazio { color: var(--muted); text-align: center; padding: 22px 12px; }
+.seletor-fechar { width: 100%; margin-top: 6px; }
+
+

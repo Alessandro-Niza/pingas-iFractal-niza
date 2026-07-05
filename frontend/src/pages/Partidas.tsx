@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { Radio } from "lucide-react";
 import { api, type Jogador, type Partida, type Modo } from "../api";
 import { PartidaCard } from "../components/PartidaCard";
-import { PartidaFullscreen } from "../components/PartidaFullscreen";
+import { useAoVivo } from "../AoVivoProvider";
 
 const GRUPOS = ["A", "B", "C", "D"];
 
@@ -16,43 +14,46 @@ function Raquete({ size = 18 }: { size?: number }) {
   );
 }
 
+/** true quando a viewport esta em largura de mobile (<= 600px). Reativo a
+ *  rotacao/resize. Usado pra ligar o "toque no card abre o ao vivo" so no
+ *  mobile — no desktop o card mantem os controles inline normais. */
+function useIsMobile(maxWidth = 600) {
+  const query = `(max-width: ${maxWidth}px)`;
+  const [is, setIs] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(query).matches : false
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setIs(mq.matches);
+    mq.addEventListener("change", on);
+    setIs(mq.matches);
+    return () => mq.removeEventListener("change", on);
+  }, [query]);
+  return is;
+}
+
 /**
  * Ordena os confrontos de um round-robin pelo metodo do circulo, pra a lista
- * sair INTERCALADA (ninguem empilhado jogando contra todos seguido) em vez da
- * ordem ingenua do laco aninhado. Isto e SO a ordem de geracao: nao cria
- * rodadas, nao usa o campo `rodada`, nao toca no backend. Funcao pura e
- * deterministica — mesma entrada, mesma saida.
- *
- * Retorna todos os pares unicos, ja orientados: quem aparece antes na lista
- * original vira o jogador A (mantem o visual estavel, ex: Arthur sempre à esq).
+ * sair INTERCALADA em vez da ordem ingenua do laco aninhado. So a ordem de
+ * geracao: nao cria rodadas, nao usa `rodada`, nao toca no backend. Pura.
  */
 function ordenarConfrontosCirculo(jogadores: Jogador[]): [Jogador, Jogador][] {
   if (jogadores.length < 2) return [];
-
-  // indice original de cada jogador, pra orientar o par (menor indice = A)
   const ordem = new Map(jogadores.map((j, i) => [j.id, i]));
-
-  // padding com bye (null) se impar, pra o circulo fechar certinho
   const roda: (Jogador | null)[] = [...jogadores];
   if (roda.length % 2 === 1) roda.push(null);
   const n = roda.length;
   const metade = n / 2;
-
   const fixo = roda[0];
   let giro = roda.slice(1);
-
   const pares: [Jogador, Jogador][] = [];
   for (let r = 0; r < n - 1; r++) {
     const linha = [fixo, ...giro];
     for (let i = 0; i < metade; i++) {
       const a = linha[i];
       const b = linha[n - 1 - i];
-      if (a && b) {
-        // orienta pelo indice original: o que vem antes na lista vira A
-        pares.push(ordem.get(a.id)! <= ordem.get(b.id)! ? [a, b] : [b, a]);
-      }
+      if (a && b) pares.push(ordem.get(a.id)! <= ordem.get(b.id)! ? [a, b] : [b, a]);
     }
-    // rotaciona o "giro" (fixo fica parado): ultimo vai pra frente
     giro = [giro[giro.length - 1], ...giro.slice(0, -1)];
   }
   return pares;
@@ -65,7 +66,13 @@ export function Partidas() {
   const [modoEf, setModoEf] = useState<Modo>("pontos_corridos");
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
-  const [aoVivoId, setAoVivoId] = useState<number | null>(null); // partida em fullscreen
+  const isMobile = useIsMobile(600);
+
+  // ao vivo e global. A pagina nao abre mais o placar (isso agora e SO pelo
+  // botao do topbar). Ela so avisa o provider quando algo muda, pra o botao do
+  // topo acender/atualizar sem precisar de F5. `versao` sobe quando um set e
+  // salvo ao vivo -> refaz a lista aqui.
+  const { abrir, versao, recarregar: recarregarAoVivo } = useAoVivo();
 
   function recarregar() {
     Promise.all([api.listarJogadores(), api.listarPartidas(), api.lerConfig()])
@@ -107,6 +114,12 @@ export function Partidas() {
     return () => ac.abort();
   }, []);
 
+  // set salvo ao vivo (versao++) -> refaz a lista pra refletir o placar novo
+  useEffect(() => {
+    if (versao > 0) recarregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versao]);
+
   const nomeDe = (id: number) => jogadores.find((j) => j.id === id)?.nome ?? "?";
   const grupoDe = (id: number) => jogadores.find((j) => j.id === id)?.grupo ?? null;
   const grupoDaPartida = (p: Partida) => {
@@ -123,9 +136,6 @@ export function Partidas() {
     try {
       const chave = (x: number, y: number) => [x, y].sort((a, b) => a - b).join("-");
       const existe = new Set(partidasGrupos.map((p) => chave(p.jogador_a_id, p.jogador_b_id)));
-      // ordem intercalada (metodo do circulo) em vez do laco aninhado.
-      // o filtro de grupo e o dedup continuam IDENTICOS — so muda a ordem
-      // em que os pares sao criados.
       for (const [ja, jb] of ordenarConfrontosCirculo(jogadores)) {
         if (modo === "grupos" && (!ja.grupo || ja.grupo !== jb.grupo)) continue;
         if (!existe.has(chave(ja.id, jb.id))) {
@@ -133,6 +143,7 @@ export function Partidas() {
         }
       }
       recarregar();
+      recarregarAoVivo(); // provider precisa saber das novas partidas
     } catch (e) {
       setErro((e as Error).message);
     } finally {
@@ -149,6 +160,7 @@ export function Partidas() {
     try {
       await api.deletarPartida(p.id);
       recarregar();
+      recarregarAoVivo(); // partida removida sai do "disponiveis"
     } catch (e) {
       setErro((e as Error).message);
     }
@@ -158,36 +170,41 @@ export function Partidas() {
   const fallbackGrupos = modo === "grupos" && modoEf !== "grupos";
   const podeGerar = ehGrupos || jogadores.length >= 2;
 
-  // envolve o card com o botao "Ao vivo" quando a partida da pra jogar ao vivo:
-  // nao finalizada E com saque ja definido (o fullscreen precisa do saca_inicial).
+  // O card NAO tem mais botao "Ao vivo": o unico ponto de entrada e o botao do
+  // topbar. O onMudou refresca a pagina E o provider (pega saque recem-definido,
+  // set salvo, etc.), pra o botao do topo acender na hora.
+  // No mobile, o card da aba Partidas vira um resumo TOCAVEL: o CSS esconde
+  // parciais/acoes/entrada de placar (sobra nomes + placar) e o toque abre o
+  // ao vivo. So partidas nao finalizadas sao tocaveis. No desktop, card normal.
   const cardDe = (p: Partida) => {
-    const podeAoVivo = !p.finalizada && (p.saca_inicial === 0 || p.saca_inicial === 1);
+    const tocavel = isMobile && !p.finalizada;
+    const abrirAoVivo = () => abrir(p.id);
     return (
-      <div className="pc-wrapper" key={p.id}>
+      <div
+        className={`pc-wrapper pc-wrapper--partidas ${tocavel ? "tap-ao-vivo" : ""}`}
+        key={p.id}
+        data-testid={`partida-card-${p.id}`}
+        onClick={tocavel ? abrirAoVivo : undefined}
+        role={tocavel ? "button" : undefined}
+        tabIndex={tocavel ? 0 : undefined}
+        aria-label={tocavel ? `Abrir placar ao vivo: ${nomeDe(p.jogador_a_id)} x ${nomeDe(p.jogador_b_id)}` : undefined}
+        onKeyDown={
+          tocavel
+            ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrirAoVivo(); } }
+            : undefined
+        }
+      >
         <PartidaCard
           partida={p}
           nomeDe={nomeDe}
-          onMudou={recarregar}
+          onMudou={() => { recarregar(); recarregarAoVivo(); }}
           onErro={setErro}
           onLimparErro={() => setErro("")}
           onApagar={ehGrupos ? undefined : apagar}
         />
-        {podeAoVivo && (
-          <button
-            className="btn ghost btn-ao-vivo"
-            data-testid={`btn-ao-vivo-${p.id}`}
-            onClick={() => setAoVivoId(p.id)}
-            title="Abrir placar em tela cheia pra marcar ponto a ponto"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-          >
-            <Radio size={15} /> Ao vivo
-          </button>
-        )}
       </div>
     );
   };
-
-  const partidaAoVivo = aoVivoId !== null ? partidas.find((p) => p.id === aoVivoId) ?? null : null;
 
   return (
     <section className="card">
@@ -261,23 +278,6 @@ export function Partidas() {
           )}
         </div>
       )}
-
-      {/* Portal pro document.body: mesmo motivo do MataMata — tira o overlay da
-          arvore da pagina pra o position:fixed ancorar no viewport e nao ser
-          preso por um containing block do tema (filter/transform). Aqui na
-          fase de grupos ja "funcionava" porque a pagina costuma ser alta, mas
-          isso era fragil (quebraria com poucos jogadores). Com o portal fica
-          deterministico. */}
-      {partidaAoVivo &&
-        createPortal(
-          <PartidaFullscreen
-            partida={partidaAoVivo}
-            nomeDe={nomeDe}
-            onMudou={recarregar}
-            onFechar={() => setAoVivoId(null)}
-          />,
-          document.body
-        )}
     </section>
   );
 }
