@@ -92,12 +92,14 @@ class ConfigOut(BaseModel):
     melhor_de_grupos: int
     melhor_de_mata: int
     melhor_de_final: int
+    tema: str
 
 class ConfigIn(BaseModel):
     modo: Optional[str] = None
     melhor_de_grupos: Optional[int] = None
     melhor_de_mata: Optional[int] = None
     melhor_de_final: Optional[int] = None
+    tema: Optional[str] = None
 
 # ---------------------------------------------------------------- app
 
@@ -163,6 +165,15 @@ def _melhor_de_da_rodada(conn, n_jogos: int) -> int:
     chave = "melhor_de_final" if n_jogos == 1 else "melhor_de_mata"
     return _get_melhor_de(conn, chave)
 
+# tema visual (global, na config). "auto" segue o sistema no front.
+_TEMAS_VALIDOS = ("eclipse", "nebula", "pure", "auto")
+
+def _get_tema(conn) -> str:
+    row = conn.execute("SELECT valor FROM config WHERE chave = 'tema'").fetchone()
+    if row is None:
+        return "auto"
+    return row["valor"] if row["valor"] in _TEMAS_VALIDOS else "auto"
+
 def _sets_de(conn, partida_id: int):
     return conn.execute(
         "SELECT numero, pontos_a, pontos_b FROM sets WHERE partida_id = ? ORDER BY numero",
@@ -203,6 +214,7 @@ def _config_out(conn) -> dict:
         "melhor_de_grupos": _get_melhor_de(conn, "melhor_de_grupos"),
         "melhor_de_mata": _get_melhor_de(conn, "melhor_de_mata"),
         "melhor_de_final": _get_melhor_de(conn, "melhor_de_final"),
+        "tema": _get_tema(conn),
     }
 
 @app.get("/config", response_model=ConfigOut)
@@ -224,6 +236,10 @@ def definir_config(dados: ConfigIn, conn: sqlite3.Connection = Depends(db_dep)):
             if val not in _MELHOR_DE_VALIDOS:
                 raise HTTPException(400, f"melhor_de invalido: {val} (use 3, 5 ou 7).")
             _set_config(conn, chave, str(val))
+    if dados.tema is not None:
+        if dados.tema not in _TEMAS_VALIDOS:
+            raise HTTPException(400, f"tema invalido: {dados.tema}.")
+        _set_config(conn, "tema", dados.tema)
     conn.commit()
     return _config_out(conn)
 

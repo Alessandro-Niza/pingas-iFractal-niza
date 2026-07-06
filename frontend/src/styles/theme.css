@@ -60,6 +60,77 @@ body,
   margin: 0;
   height: 100%;
 }
+/* ============================================================
+   TEMAS — colar no Theme.css, LOGO APÓS o bloco :root.
+   Cada tema so redefine as CORES (as variaveis). O resto do CSS
+   nao muda, porque tudo aponta pra var(--x). O :root continua
+   sendo o Nebula (default/fallback antes do JS aplicar data-tema).
+   Uso :root[data-tema=...] pra garantir que sobrepoe o :root.
+   ============================================================ */
+
+/* NEBULA — escuro azul (= tema atual). Restatement explicito p/ clareza. */
+:root[data-tema="nebula"] {
+  --bg: #0a0e17; --surface: #0f1521; --surface-2: #141c2b;
+  --border: #1f2a3d; --border-soft: #18222f;
+  --accent: #4f8cff; --accent-strong: #3b82f6; --accent-soft: rgba(59,130,246,0.12);
+  --text: #e6ebf2; --muted: #8893a7; --muted-2: #5c6678;
+  --win: #34d399; --loss: #f87171; --gold: #facc15; --champ: #4f8cff;
+  --glass: rgba(13,18,28,0.82); --glass-border: rgba(255,255,255,.06);
+  --tech-glow: rgba(59,130,246,0.18); --tech-glow-2: rgba(37,99,235,0.1);
+}
+
+/* ECLIPSE — escuro monocromatico (azul -> ardosia). */
+:root[data-tema="eclipse"] {
+  --bg: #090c12; --surface: #0e131c; --surface-2: #141a26;
+  --border: #232c3b; --border-soft: #1a2130;
+  --accent: #9aa6b8; --accent-strong: #7e8a9d; --accent-soft: rgba(154,166,184,0.12);
+  --text: #e8ebf0; --muted: #8b93a2; --muted-2: #5b6472;
+  --win: #4ade80; --loss: #f87171; --gold: #e5c158; --champ: #9aa6b8;
+  --glass: rgba(9,12,18,0.82); --glass-border: rgba(255,255,255,.05);
+  --tech-glow: rgba(148,163,184,0.14); --tech-glow-2: rgba(100,116,139,0.08);
+}
+
+/* PURE — claro, accent ardosia. */
+:root[data-tema="pure"] {
+  --bg: #f4f5f7; --surface: #ffffff; --surface-2: #f0f2f5;
+  --border: #dde1e8; --border-soft: #e8ebef;
+  --accent: #475569; --accent-strong: #334155; --accent-soft: rgba(71,85,105,0.10);
+  --text: #1a1f28; --muted: #64748b; --muted-2: #94a3b8;
+  --win: #16a34a; --loss: #dc2626; --gold: #ca8a04; --champ: #475569;
+  --glass: rgba(255,255,255,0.82); --glass-border: rgba(0,0,0,.06);
+  --tech-glow: rgba(71,85,105,0.08); --tech-glow-2: rgba(100,116,139,0.05);
+}
+
+/* --- fundos que estavam com cor CRAVADA (nao usam var): sobreponho por tema
+   pros temas claro/mono nao ficarem com fundo escuro do Nebula. --- */
+
+/* corpo (Nebula usa o gradiente default do Theme.css; aqui so Eclipse e Pure) */
+:root[data-tema="eclipse"] body {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(120,130,150,.06), transparent 35%),
+    radial-gradient(circle at 90% 15%, rgba(90,100,120,.05), transparent 28%),
+    linear-gradient(180deg, #0a0d13 0%, #080b10 45%, #06080c 100%);
+}
+:root[data-tema="pure"] body {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(71,85,105,.05), transparent 35%),
+    radial-gradient(circle at 90% 15%, rgba(100,116,139,.05), transparent 28%),
+    linear-gradient(180deg, #f7f8fa 0%, #f2f4f7 45%, #eef1f5 100%);
+}
+
+/* fullscreen ao vivo (Nebula/Eclipse ficam bem no escuro; Pure vira claro) */
+:root[data-tema="pure"] .fs-overlay {
+  background: radial-gradient(60% 50% at 50% 0%, #eef1f5, #f4f5f7 80%);
+}
+
+/* logo "iFractal" gradiente e cravado azul; nos temas mono/claro uso o accent */
+:root[data-tema="eclipse"] .brand .accent,
+:root[data-tema="pure"] .brand .accent {
+  background: none;
+  -webkit-text-fill-color: var(--accent);
+  color: var(--accent);
+  filter: none;
+}
 
 /* fundo: glow azul no canto + profundidade. A ORBITA de traços finos
    (aneis + pontos) e um SVG no App.tsx (componente Orbita), estilizado

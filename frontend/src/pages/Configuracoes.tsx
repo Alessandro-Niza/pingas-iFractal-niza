@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
-import { api, type Modo, type MelhorDe } from "../api";
+import { api, type Modo, type MelhorDe, type Tema } from "../api";
+import { useTema } from "../TemaProvider";
 
 export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => void }) {
   const [modo, setModo] = useState<Modo>("pontos_corridos");
@@ -9,6 +10,7 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
   const [ocupado, setOcupado] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [recomecando, setRecomecando] = useState(false);
+  const { tema, setTema } = useTema();
 
   // melhor_de por fase (config no backend). Comecam com os defaults do backend.
   const [mdGrupos, setMdGrupos] = useState<number>(3);
@@ -171,6 +173,28 @@ export function Configuracoes({ onModoChange }: { onModoChange?: (m: Modo) => vo
             2 jogadores para iniciar a fase de grupos.
           </p>
         )}
+      </section>
+
+      <section className="card">
+        <h2 className="card-title">Tema</h2>
+        <p style={{ color: "var(--muted)", fontSize: "0.9rem", margin: "0 0 14px", lineHeight: 1.5 }}>
+          Vale para todos os aparelhos (config global). <strong>Automático</strong> segue
+          o tema do sistema (claro ou escuro).
+        </p>
+        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <span>Tema visual</span>
+          <select
+            data-testid="cfg-tema"
+            value={tema}
+            onChange={(e) => setTema(e.target.value as Tema)}
+            style={{ minWidth: 190 }}
+          >
+            <option value="auto">Automático (sistema)</option>
+            <option value="nebula">Nebula — escuro azul</option>
+            <option value="eclipse">Eclipse — escuro</option>
+            <option value="pure">Pure — claro</option>
+          </select>
+        </label>
       </section>
 
       <section className="card">

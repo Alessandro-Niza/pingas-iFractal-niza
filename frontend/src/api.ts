@@ -47,12 +47,16 @@ export type Modo = "pontos_corridos" | "grupos";
 // melhor_de configuravel por fase (opcoes oferecidas na UI)
 export type MelhorDe = 3 | 5 | 7;
 
+// tema visual (global). "auto" segue o sistema (claro=pure, escuro=nebula).
+export type Tema = "eclipse" | "nebula" | "pure" | "auto";
+
 export interface Config {
   modo: Modo;
   modo_efetivo: Modo;
   melhor_de_grupos: number;
   melhor_de_mata: number;
   melhor_de_final: number;
+  tema: Tema;
 }
 
 const API_BASE = import.meta.env.DEV ? `http://${location.hostname}:8000` : "";
@@ -85,6 +89,7 @@ export const api = {
       melhor_de_grupos: MelhorDe;
       melhor_de_mata: MelhorDe;
       melhor_de_final: MelhorDe;
+      tema: Tema;
     }>
   ) => req<Config>("/config", { method: "PUT", body: JSON.stringify(patch) }),
 

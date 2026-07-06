@@ -11,6 +11,7 @@ import { Configuracoes } from "./pages/Configuracoes";
 import { AoVivoProvider, useAoVivo } from "./AoVivoProvider";
 import { PartidaFullscreen } from "./components/PartidaFullscreen";
 import { SeletorAoVivo } from "./SeletorAoVivo";
+import { TemaProvider } from "./TemaProvider";
 
 type Aba = "classificacao" | "mata" | "grupos" | "partidas" | "jogadores" | "config";
 
@@ -169,8 +170,10 @@ function AppInner() {
 
 export default function App() {
   return (
-    <AoVivoProvider>
-      <AppInner />
-    </AoVivoProvider>
+    <TemaProvider>
+      <AoVivoProvider>
+        <AppInner />
+      </AoVivoProvider>
+    </TemaProvider>
   );
 }
