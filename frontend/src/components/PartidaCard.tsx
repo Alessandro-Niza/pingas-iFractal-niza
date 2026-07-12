@@ -125,10 +125,12 @@ export function PartidaCard({
       onErro?.("Necessário escolher quem começa sacando.");
       return;
     }
-    const a = parseInt(placar.a, 10);
-    const b = parseInt(placar.b, 10);
-    if (isNaN(a) || isNaN(b)) {
-      onErro?.("Preencha os dois placares.");
+    // campo vazio conta como 0 (o placeholder ja mostra "0"): marcar 11-0 sem
+    // tocar no lado do zero passa a funcionar, igual ja acontece no stepper.
+    const a = parseInt(placar.a || "0", 10);
+    const b = parseInt(placar.b || "0", 10);
+    if (a === 0 && b === 0) {
+      onErro?.("Preencha o placar de pelo menos um jogador.");
       return;
     }
     if (!setFinalizado(a, b)) {
@@ -157,12 +159,8 @@ export function PartidaCard({
 
   async function salvarEdicaoSet(numero: number) {
     const e = edits[numero];
-    const a = parseInt(e?.a ?? "", 10);
-    const b = parseInt(e?.b ?? "", 10);
-    if (isNaN(a) || isNaN(b)) {
-      onErro?.("Preencha os dois placares.");
-      return;
-    }
+    const a = parseInt((e?.a ?? "") || "0", 10);
+    const b = parseInt((e?.b ?? "") || "0", 10);
     if (!setFinalizado(a, b)) {
       onErro?.("Set inválido. Em 10 × 10, vence quem abrir 2 pontos de vantagem.");
       return;

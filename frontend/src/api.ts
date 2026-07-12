@@ -59,6 +59,102 @@ export interface Config {
   tema: Tema;
 }
 
+// ---- estatisticas por jogador (espelham os models do backend) ----
+export interface EstatVolume {
+  jogos: number;
+  vitorias: number;
+  derrotas: number;
+  aproveitamento: number;   // 0..1
+  sets_ganhos: number;
+  sets_perdidos: number;
+  pontos_por_set: number;
+  bagels_aplicados: number;
+  bagels_sofridos: number;
+  amostra_pequena: boolean;
+}
+export interface EstatH2H {
+  adversario_id: number;
+  nome: string;
+  vitorias: number;
+  derrotas: number;
+  saldo_pontos: number;
+  jogos: number;
+}
+export interface EstatFase {
+  vitorias: number;
+  derrotas: number;
+  jogos: number;
+}
+export interface EstatPorFase {
+  grupos: EstatFase | null;
+  mata: EstatFase | null;
+}
+export interface EstatClutch {
+  sets_deuce: number;
+  vencidos: number;
+  aproveitamento: number | null;
+}
+export interface EstatJogador {
+  jogador_id: number;
+  nome: string;
+  grupo: string | null;
+  volume: EstatVolume;
+  head_to_head: EstatH2H[];
+  vitima: EstatH2H | null;
+  algoz: EstatH2H | null;
+  aluno: EstatH2H | null;
+  doutrinador: EstatH2H | null;
+  clutch: EstatClutch;
+  por_fase: EstatPorFase;
+}
+
+// ---- resumo/dashboard do campeonato ----
+export interface Premio {
+  chave: string;
+  titulo: string;
+  jogador: string | null;
+  valor: string | null;
+  detalhe: string | null;
+}
+export interface Atropelada {
+  vencedor: string;
+  perdedor: string;
+  sets: string;
+  margem: number;
+}
+export interface LinhaJogadorResumo {
+  jogador_id: number;
+  nome: string;
+  jogos: number;
+  vitorias: number;
+  derrotas: number;
+  pontos: number;
+  media_set: number;
+  sets_ganhos: number;
+  sets_perdidos: number;
+  pontos_sofridos: number;
+}
+export interface PassouPorBaixo {
+  jogador_id: number;
+  nome: string;
+  vezes: number;
+}
+export interface ResumoCampeonato {
+  modo: Modo;
+  modo_efetivo: Modo;
+  fase_atual: string;
+  campeao: string | null;
+  total_partidas: number;
+  partidas_totais: number;
+  progresso: number;
+  total_sets: number;
+  total_pontos: number;
+  total_bagels: number;
+  premios: Premio[];
+  passou_por_baixo: PassouPorBaixo[];
+  jogadores: LinhaJogadorResumo[];
+}
+
 const API_BASE = import.meta.env.DEV ? `http://${location.hostname}:8000` : "";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -103,6 +199,10 @@ export const api = {
     }),
   deletarJogador: (id: number) =>
     req<void>(`/jogadores/${id}`, { method: "DELETE" }),
+  estatisticasJogador: (id: number, signal?: AbortSignal) =>
+    req<EstatJogador>(`/jogadores/${id}/estatisticas`, { signal }),
+  resumoCampeonato: (signal?: AbortSignal) =>
+    req<ResumoCampeonato>("/campeonato/resumo", { signal }),
 
   listarPartidas: (signal?: AbortSignal) => req<Partida[]>("/partidas", { signal }),
   criarPartida: (jogador_a_id: number, jogador_b_id: number) =>

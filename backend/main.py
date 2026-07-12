@@ -101,6 +101,100 @@ class ConfigIn(BaseModel):
     melhor_de_final: Optional[int] = None
     tema: Optional[str] = None
 
+# ---- estatisticas por jogador (derivadas, sem schema novo) ----
+class EstatVolume(BaseModel):
+    jogos: int
+    vitorias: int
+    derrotas: int
+    aproveitamento: float          # 0..1 (vitorias/jogos)
+    sets_ganhos: int
+    sets_perdidos: int
+    pontos_por_set: float          # media de pontos FEITOS por set
+    bagels_aplicados: int          # sets vencidos 11-0
+    bagels_sofridos: int           # sets perdidos 0-11
+    amostra_pequena: bool          # jogos < 3 (front exibe com ressalva)
+
+class EstatH2H(BaseModel):
+    adversario_id: int
+    nome: str
+    vitorias: int
+    derrotas: int
+    saldo_pontos: int
+    jogos: int
+
+class EstatFase(BaseModel):
+    vitorias: int
+    derrotas: int
+    jogos: int
+
+class EstatPorFase(BaseModel):
+    grupos: Optional[EstatFase] = None
+    mata: Optional[EstatFase] = None
+
+class EstatClutch(BaseModel):
+    sets_deuce: int                       # sets que foram a 10-10+ (envolvendo o jogador)
+    vencidos: int                         # quantos desses ele venceu
+    aproveitamento: Optional[float] = None  # vencidos/sets_deuce, ou None se nao houve deuce
+
+class EstatJogador(BaseModel):
+    jogador_id: int
+    nome: str
+    grupo: Optional[str]
+    volume: EstatVolume
+    head_to_head: list[EstatH2H]
+    vitima: Optional[EstatH2H] = None        # quem ele mais atropelou (saldo de pontos)
+    algoz: Optional[EstatH2H] = None         # quem mais o atropelou
+    aluno: Optional[EstatH2H] = None         # reencontro (2+ jogos): domina no retrospecto
+    doutrinador: Optional[EstatH2H] = None   # reencontro (2+ jogos): e dominado
+    clutch: EstatClutch
+    por_fase: EstatPorFase
+
+# ---- resumo/dashboard do campeonato (superlativos comparativos) ----
+class Premio(BaseModel):
+    chave: str                      # id estavel (pra testid): "artilheiro", etc.
+    titulo: str
+    jogador: Optional[str] = None
+    valor: Optional[str] = None
+    detalhe: Optional[str] = None
+
+class Atropelada(BaseModel):
+    vencedor: str
+    perdedor: str
+    sets: str
+    margem: int                     # saldo de pontos do confronto
+
+class LinhaJogadorResumo(BaseModel):
+    jogador_id: int
+    nome: str
+    jogos: int
+    vitorias: int
+    derrotas: int
+    pontos: int
+    media_set: float
+    sets_ganhos: int
+    sets_perdidos: int
+    pontos_sofridos: int
+
+class PassouPorBaixo(BaseModel):
+    jogador_id: int
+    nome: str
+    vezes: int                      # quantos sets 0-11 (a zero) o jogador levou
+
+class ResumoCampeonato(BaseModel):
+    modo: str
+    modo_efetivo: str
+    fase_atual: str                 # sem_jogos | grupos | pontos_corridos | mata | encerrado
+    campeao: Optional[str] = None
+    total_partidas: int             # finalizadas
+    partidas_totais: int            # todas (pra progresso)
+    progresso: float                # 0..1
+    total_sets: int
+    total_pontos: int
+    total_bagels: int
+    premios: list[Premio]
+    passou_por_baixo: list[PassouPorBaixo]
+    jogadores: list[LinhaJogadorResumo]
+
 # ---------------------------------------------------------------- app
 
 app = FastAPI(title="Torneio - Pingas iFractal")
@@ -462,9 +556,287 @@ def _calcular_classificacao(conn: sqlite3.Connection, modo: str):
 
     return linhas
 
+def _estatisticas_jogador(conn: sqlite3.Connection, jid: int):
+    """Estatisticas derivadas de TODAS as partidas finalizadas do jogador
+    (grupos + mata). Funcao pura sobre o banco: facil de cobrir com pytest.
+    Blocos que ficam vazios (ex: 'por fase' sem mata-mata) o front suprime."""
+    jog = conn.execute(
+        "SELECT id, nome, grupo FROM jogadores WHERE id = ?", (jid,)
+    ).fetchone()
+    if jog is None:
+        return None
+
+    nomes = {j["id"]: j["nome"] for j in conn.execute("SELECT id, nome FROM jogadores")}
+    partidas = conn.execute(
+        "SELECT * FROM partidas WHERE finalizada = 1 "
+        "AND (jogador_a_id = ? OR jogador_b_id = ?)",
+        (jid, jid),
+    ).fetchall()
+
+    jogos = vitorias = 0
+    sets_g = sets_p = 0
+    pontos_feitos = n_sets = 0
+    bagels_ap = bagels_sof = 0
+    deuce_total = deuce_venc = 0
+    h2h: dict = {}                                  # adv -> {v,d,pf,pa}
+    fase = {"grupos": [0, 0, 0], "mata": [0, 0, 0]}  # [v, d, jogos]
+
+    for p in partidas:
+        sou_a = p["jogador_a_id"] == jid
+        adv = p["jogador_b_id"] if sou_a else p["jogador_a_id"]
+        meus_sets = p["sets_a"] if sou_a else p["sets_b"]
+        sets_adv = p["sets_b"] if sou_a else p["sets_a"]
+        venci = meus_sets > sets_adv
+
+        jogos += 1
+        vitorias += 1 if venci else 0
+        sets_g += meus_sets
+        sets_p += sets_adv
+
+        hv = h2h.setdefault(adv, {"v": 0, "d": 0, "pf": 0, "pa": 0})
+        hv["v" if venci else "d"] += 1
+
+        f = fase.get(p["fase"])
+        if f is not None:
+            f[0 if venci else 1] += 1
+            f[2] += 1
+
+        for stt in _sets_de(conn, p["id"]):
+            meus = stt["pontos_a"] if sou_a else stt["pontos_b"]
+            deles = stt["pontos_b"] if sou_a else stt["pontos_a"]
+            n_sets += 1
+            pontos_feitos += meus
+            hv["pf"] += meus
+            hv["pa"] += deles
+            if meus == 11 and deles == 0:
+                bagels_ap += 1
+            if deles == 11 and meus == 0:
+                bagels_sof += 1
+            if meus >= 10 and deles >= 10:   # foi a deuce (10-10+)
+                deuce_total += 1
+                if meus > deles:
+                    deuce_venc += 1
+
+    derrotas = jogos - vitorias
+    volume = {
+        "jogos": jogos, "vitorias": vitorias, "derrotas": derrotas,
+        "aproveitamento": (vitorias / jogos) if jogos else 0.0,
+        "sets_ganhos": sets_g, "sets_perdidos": sets_p,
+        "pontos_por_set": (pontos_feitos / n_sets) if n_sets else 0.0,
+        "bagels_aplicados": bagels_ap, "bagels_sofridos": bagels_sof,
+        "amostra_pequena": jogos < 3,
+    }
+
+    h2h_list = sorted(
+        (
+            {"adversario_id": adv, "nome": nomes.get(adv, "?"),
+             "vitorias": h["v"], "derrotas": h["d"],
+             "saldo_pontos": h["pf"] - h["pa"], "jogos": h["v"] + h["d"]}
+            for adv, h in h2h.items()
+        ),
+        key=lambda x: (-(x["vitorias"] - x["derrotas"]), -x["saldo_pontos"], x["nome"]),
+    )
+
+    # VITIMA / ALGOZ: dominio por MARGEM DE PONTOS (funciona com 1 confronto so).
+    # vitima = quem ele mais atropelou (venceu com maior saldo de pontos a favor);
+    # algoz  = quem mais o atropelou (perdeu com maior saldo de pontos contra).
+    venc_dom = [x for x in h2h_list if x["vitorias"] > x["derrotas"] and x["saldo_pontos"] > 0]
+    perd_dom = [x for x in h2h_list if x["derrotas"] > x["vitorias"] and x["saldo_pontos"] < 0]
+    vitima = max(venc_dom, key=lambda x: x["saldo_pontos"]) if venc_dom else None
+    algoz = min(perd_dom, key=lambda x: x["saldo_pontos"]) if perd_dom else None
+
+    # ALUNO / DOUTRINADOR: so no REENCONTRO (2+ jogos vs o mesmo adversario) — num
+    # torneio de edicao unica isso so acontece se os dois caem juntos no mata-mata.
+    aluno = doutrinador = None
+    reencontros = [x for x in h2h_list if x["jogos"] >= 2]
+    if reencontros:
+        melhor = max(reencontros, key=lambda x: (x["vitorias"] - x["derrotas"], x["saldo_pontos"]))
+        pior = min(reencontros, key=lambda x: (x["vitorias"] - x["derrotas"], -x["saldo_pontos"]))
+        if melhor["vitorias"] - melhor["derrotas"] > 0:
+            aluno = melhor
+        if pior["vitorias"] - pior["derrotas"] < 0:
+            doutrinador = pior
+
+    clutch = {
+        "sets_deuce": deuce_total, "vencidos": deuce_venc,
+        "aproveitamento": (deuce_venc / deuce_total) if deuce_total else None,
+    }
+
+    por_fase = {"grupos": None, "mata": None}
+    for nome_fase in ("grupos", "mata"):
+        v, d, j = fase[nome_fase]
+        if j > 0:
+            por_fase[nome_fase] = {"vitorias": v, "derrotas": d, "jogos": j}
+
+    return {
+        "jogador_id": jog["id"], "nome": jog["nome"], "grupo": jog["grupo"],
+        "volume": volume, "head_to_head": h2h_list,
+        "vitima": vitima, "algoz": algoz,
+        "aluno": aluno, "doutrinador": doutrinador,
+        "clutch": clutch, "por_fase": por_fase,
+    }
+
 @app.get("/classificacao", response_model=list[LinhaClassificacao])
 def classificacao(conn: sqlite3.Connection = Depends(db_dep)):
     return _calcular_classificacao(conn, get_modo_efetivo(conn))
+
+def _resumo_campeonato(conn: sqlite3.Connection) -> dict:
+    """Superlativos do torneio: compara TODOS os jogadores em cada categoria e
+    aponta o lider. Funcao pura sobre o banco (facil de cobrir com pytest)."""
+    jogadores = conn.execute("SELECT id, nome FROM jogadores").fetchall()
+    nomes = {j["id"]: j["nome"] for j in jogadores}
+    todas = conn.execute("SELECT * FROM partidas").fetchall()
+    finalizadas = [p for p in todas if p["finalizada"]]
+    mata = [p for p in todas if p["fase"] == "mata"]
+
+    agg = {
+        j["id"]: {"pf": 0, "pa": 0, "nsets": 0, "bagels_ap": 0, "bagels_sof": 0,
+                  "deuce_t": 0, "deuce_v": 0, "jogos": 0, "vitorias": 0,
+                  "sets_g": 0, "sets_p": 0}
+        for j in jogadores
+    }
+    total_sets = total_pontos = total_bagels = 0
+
+    for p in finalizadas:
+        a, b = p["jogador_a_id"], p["jogador_b_id"]
+        sets = _sets_de(conn, p["id"])
+        pa_tot = sum(x["pontos_a"] for x in sets)
+        pb_tot = sum(x["pontos_b"] for x in sets)
+        venceu_a = p["sets_a"] > p["sets_b"]
+
+        for pid, meus, deles, venci, msets, dsets in (
+            (a, pa_tot, pb_tot, venceu_a, p["sets_a"], p["sets_b"]),
+            (b, pb_tot, pa_tot, not venceu_a, p["sets_b"], p["sets_a"]),
+        ):
+            g = agg.get(pid)
+            if g is None:
+                continue
+            g["pf"] += meus
+            g["pa"] += deles
+            g["jogos"] += 1
+            g["vitorias"] += 1 if venci else 0
+            g["sets_g"] += msets
+            g["sets_p"] += dsets
+
+        for x in sets:
+            total_sets += 1
+            total_pontos += x["pontos_a"] + x["pontos_b"]
+            for pid, meus, deles in ((a, x["pontos_a"], x["pontos_b"]), (b, x["pontos_b"], x["pontos_a"])):
+                g = agg.get(pid)
+                if g is None:
+                    continue
+                g["nsets"] += 1
+                if meus == 11 and deles == 0:
+                    g["bagels_ap"] += 1
+                    total_bagels += 1
+                if deles == 11 and meus == 0:
+                    g["bagels_sof"] += 1
+                if meus >= 10 and deles >= 10:
+                    g["deuce_t"] += 1
+                    if meus > deles:
+                        g["deuce_v"] += 1
+
+    jogou = {pid: g for pid, g in agg.items() if g["jogos"] > 0}
+    premios = []
+
+    if jogou:
+        pid = max(jogou, key=lambda k: jogou[k]["pf"])
+        g = jogou[pid]
+        premios.append({"chave": "artilheiro", "titulo": "Artilheiro",
+                        "jogador": nomes.get(pid), "valor": f'{g["pf"]} pts',
+                        "detalhe": f'{g["pf"] / max(1, g["nsets"]):.1f} por set'})
+
+    cand = {pid: g for pid, g in jogou.items() if g["bagels_ap"] > 0}
+    if cand:
+        pid = max(cand, key=lambda k: cand[k]["bagels_ap"])
+        premios.append({"chave": "rei_bagel", "titulo": "Rei do bagel",
+                        "jogador": nomes.get(pid), "valor": str(cand[pid]["bagels_ap"]),
+                        "detalhe": "sets a zero (11-0)"})
+
+    cand = {pid: g for pid, g in jogou.items() if g["nsets"] >= 3}
+    if cand:
+        pid = min(cand, key=lambda k: cand[k]["pa"] / cand[k]["nsets"])
+        media = cand[pid]["pa"] / cand[pid]["nsets"]
+        premios.append({"chave": "muralha", "titulo": "Muralha",
+                        "jogador": nomes.get(pid), "valor": f'{media:.1f}',
+                        "detalhe": "pontos sofridos por set"})
+
+    cand = {pid: g for pid, g in jogou.items() if g["deuce_t"] >= 2}
+    if cand:
+        pid = max(cand, key=lambda k: cand[k]["deuce_v"] / cand[k]["deuce_t"])
+        g = cand[pid]
+        premios.append({"chave": "clutch", "titulo": "Mais clutch",
+                        "jogador": nomes.get(pid), "valor": f'{round(g["deuce_v"] / g["deuce_t"] * 100)}%',
+                        "detalhe": f'{g["deuce_v"]}/{g["deuce_t"]} sets no deuce'})
+
+    jogadores_lista = sorted(
+        (
+            {"jogador_id": pid, "nome": nomes.get(pid, "?"),
+             "jogos": g["jogos"], "vitorias": g["vitorias"],
+             "derrotas": g["jogos"] - g["vitorias"], "pontos": g["pf"],
+             "media_set": (g["pf"] / g["nsets"]) if g["nsets"] else 0.0,
+             "sets_ganhos": g["sets_g"], "sets_perdidos": g["sets_p"],
+             "pontos_sofridos": g["pa"]}
+            for pid, g in jogou.items()
+        ),
+        key=lambda x: (-x["vitorias"], -(x["pontos"] - x["pontos_sofridos"]), -x["pontos"], x["nome"]),
+    )
+
+    passou_por_baixo = sorted(
+        (
+            {"jogador_id": pid, "nome": nomes.get(pid, "?"), "vezes": g["bagels_sof"]}
+            for pid, g in agg.items() if g["bagels_sof"] > 0
+        ),
+        key=lambda x: (-x["vezes"], x["nome"]),
+    )
+
+    # campeao + fase atual
+    modo_ef = get_modo_efetivo(conn)
+    campeao = None
+    if mata:
+        rodadas = sorted({(p["rodada"] or 0) for p in mata})
+        final = [p for p in mata if (p["rodada"] or 0) == rodadas[-1]]
+        if len(final) == 1 and final[0]["finalizada"]:
+            f = final[0]
+            vid = f["jogador_a_id"] if f["sets_a"] > f["sets_b"] else f["jogador_b_id"]
+            campeao = nomes.get(vid)
+    elif finalizadas and all(p["finalizada"] for p in todas):
+        cls = _calcular_classificacao(conn, modo_ef)
+        if cls:
+            campeao = cls[0]["nome"]
+
+    if len(todas) == 0:
+        fase_atual = "sem_jogos"
+    elif mata:
+        fase_atual = "encerrado" if campeao else "mata"
+    elif modo_ef == "grupos":
+        fase_atual = "grupos"
+    else:
+        fase_atual = "encerrado" if all(p["finalizada"] for p in todas) else "pontos_corridos"
+
+    return {
+        "modo": get_modo(conn), "modo_efetivo": modo_ef,
+        "fase_atual": fase_atual, "campeao": campeao,
+        "total_partidas": len(finalizadas), "partidas_totais": len(todas),
+        "progresso": (len(finalizadas) / len(todas)) if todas else 0.0,
+        "total_sets": total_sets, "total_pontos": total_pontos, "total_bagels": total_bagels,
+        "premios": premios,
+        "passou_por_baixo": passou_por_baixo,
+        "jogadores": jogadores_lista,
+    }
+
+
+@app.get("/campeonato/resumo", response_model=ResumoCampeonato)
+def resumo_campeonato(conn: sqlite3.Connection = Depends(db_dep)):
+    return _resumo_campeonato(conn)
+
+
+@app.get("/jogadores/{jogador_id}/estatisticas", response_model=EstatJogador)
+def estatisticas_jogador(jogador_id: int, conn: sqlite3.Connection = Depends(db_dep)):
+    est = _estatisticas_jogador(conn, jogador_id)
+    if est is None:
+        raise HTTPException(404, "Jogador nao encontrado.")
+    return est
 
 # ---------------------------------------------------------------- mata-mata
 

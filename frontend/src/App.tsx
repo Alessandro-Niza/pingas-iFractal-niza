@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Trophy, Swords, Users, Crown, User, Settings, Menu, Radio } from "lucide-react";
+import { Trophy, Swords, Users, Crown, User, Settings, Menu, Radio, LayoutDashboard } from "lucide-react";
 import { api, type Modo } from "./api";
+import { VisaoGeral } from "./pages/VisaoGeral";
 import { Classificacao } from "./pages/Classificacao";
 import { Partidas } from "./pages/Partidas";
 import { Grupos } from "./pages/Grupos";
@@ -13,12 +14,13 @@ import { PartidaFullscreen } from "./components/PartidaFullscreen";
 import { SeletorAoVivo } from "./SeletorAoVivo";
 import { TemaProvider } from "./TemaProvider";
 
-type Aba = "classificacao" | "mata" | "grupos" | "partidas" | "jogadores" | "config";
+type Aba = "visao" | "classificacao" | "mata" | "grupos" | "partidas" | "jogadores" | "config";
 
 // ordem das abas de navegação (Configurações NÃO entra aqui: virou engrenagem no topo).
 // testId = id estável p/ automação (Appium), desacoplado do label visível.
 // soGrupos = aba só habilitada quando a fase de grupos está ativa.
 const ABAS: { id: Aba; label: string; testId: string; Icon: typeof Trophy; soGrupos?: boolean }[] = [
+  { id: "visao", label: "Visão geral", testId: "nav-visao", Icon: LayoutDashboard },
   { id: "classificacao", label: "Classificação", testId: "nav-classificacao", Icon: Trophy },
   { id: "mata", label: "Mata-Mata", testId: "nav-mata", Icon: Crown, soGrupos: true },
   { id: "partidas", label: "Partidas", testId: "nav-partidas", Icon: Swords },
@@ -150,6 +152,7 @@ function AppInner() {
 
         {/* key força remontar ao trocar de aba => recarrega dados frescos */}
         <main className="conteudo">
+          {aba === "visao" && <VisaoGeral key="v" />}
           {aba === "classificacao" && <Classificacao key="c" />}
           {aba === "partidas" && <Partidas key="p" />}
           {aba === "grupos" && <Grupos key="g" />}
